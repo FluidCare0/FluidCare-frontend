@@ -1,12 +1,43 @@
-# React + Vite
+Sure! Here's the updated **complete README.md** with the commands section exactly as you specified:
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+````markdown
+# React Vite Project
 
-Currently, two official plugins are available:
+This is a React project built with **Vite**, using **Tailwind CSS** for styling. It includes API utilities, custom hooks, and reusable components.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Prerequisites
 
-## Expanding the ESLint configuration
+- Node.js (v18+ recommended)
+- npm (v9+ recommended) or Yarn/Pnpm
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/kartik3165/BE-Project-frontend.git
+````
+
+### 2. Install all dependencies
+
+## Commands
+
+```bash
+# Install all dependencies
+npm install
+
+# Start the development server
+npm run dev
+
+
+Key dependencies included in this project:
+
+* **React** and **React DOM**
+* **Vite** and **Vite React plugin**
+* **Tailwind CSS** and **autoprefixer**
+* **Axios**, **Day.js**, **jwt-decode**
+* **ESLint** and related plugins for React
+
+
+
+
