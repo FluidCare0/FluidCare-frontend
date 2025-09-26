@@ -1,45 +1,66 @@
-import React, { useState, useEffect } from 'react';
-import api from '../api/api';
-import CompleteProfile from './CompleteProfile';
+import React, { useState, useEffect } from "react";
+import api from "../api/api";
+import CompleteProfile from "./CompleteProfile";
+import PatientStatusCard from "../components/PatientStatusCard";
 
 function Dashboard({ role, onLogin }) {
   const [showCompleteProfile, setShowCompleteProfile] = useState(false);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [trialMessage, setTrialMessage] = useState('');
-  const [trialInfo, setTrialInfo] = useState(null);
+  const [beds, setBeds] = useState([]);
 
   useEffect(() => {
     checkUserProfile();
+    fetchBeds();
   }, []);
 
+  // Fetch user profile
   const checkUserProfile = async () => {
     try {
-      const userRes = await api.get('auth/user/');
+      const userRes = await api.get("auth/user/");
       setUserData(userRes.data);
-      
-      if (userRes.data.name === 'empty' || !userRes.data.name) {
+
+      if (userRes.data.name === "empty" || !userRes.data.name) {
         setShowCompleteProfile(true);
       }
     } catch (error) {
-      console.error('Failed to fetch user data:', error);
+      console.error("Failed to fetch user data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStartTrial = async () => {
+  // Fetch bed data with fallback sample data
+  const fetchBeds = async () => {
     try {
-      const response = await api.post('auth/start-trial/');
-      setTrialMessage(response.data.message);
-      setTrialInfo(response.data.data);
+      const res = await api.get("hospital/beds/"); // Replace with real API
+      setBeds(res.data);
     } catch (error) {
-      if (error.response) {
-        setTrialMessage(error.response.data.message);
-        setTrialInfo(error.response.data.data);
-      } else {
-        setTrialMessage('Something went wrong.');
-      }
+      console.warn("Failed to fetch beds, using sample data:", error);
+
+      setBeds([
+        {
+          id: 1,
+          patient: { name: "John Doe" },
+          fluidBag: { type: "Saline", current_level_ml: 500, capacity_ml: 1000, threshold_low: 200 },
+          bed_number: "A101",
+          ward: { name: "ICU" },
+        },
+        {
+          id: 2,
+          patient: { name: "Jane Smith" },
+          fluidBag: { type: "Ringer", current_level_ml: 300, capacity_ml: 1000, threshold_low: 200 },
+          bed_number: "A102",
+          ward: { name: "ICU" },
+        },
+        {
+          id: 3,
+          patient: { name: "Alice Johnson" },
+          fluidBag: { type: "Dextrose", current_level_ml: 800, capacity_ml: 1000, threshold_low: 200 },
+          bed_number: "A103",
+          ward: { name: "Ward 1" },
+        },
+      ]);
     }
   };
 
@@ -55,39 +76,17 @@ function Dashboard({ role, onLogin }) {
     return <CompleteProfile user={userData} onLogin={onLogin} />;
   }
 
-return (
-    <div className="flex items-center justify-center min-h-screen bg-green-50">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">
-          Welcome to Dashboard 🎉
-        </h1>
-        <p className="text-lg text-gray-600">
-          Hello {userData?.name}! (Role: {role})
-        </p>
-        <p className="text-lg text-gray-600">
-          User ID: {userData.id} <br />
-          Mobile: {userData.mobile}
-        </p>
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold">Hospital Dashboard</h1>
+        <p className="text-muted-foreground">Patient monitoring and status overview</p>
+      </div>
 
-        {/* Trial Section */}
-        <div className="mt-6">
-          {!trialInfo ? (
-            <button
-              onClick={handleStartTrial}
-              className="px-6 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition"
-            >
-              Start Trial
-            </button>
-          ) : (
-            <div className="text-gray-700">
-              <p className="font-medium">{trialMessage}</p>
-              <p>
-                Trial Start: {new Date(trialInfo.trial_start).toLocaleString()}
-              </p>
-              <p>Trial End: {new Date(trialInfo.trial_end).toLocaleString()}</p>
-            </div>
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {beds.map((bed) => (
+          <PatientStatusCard key={bed.id} bed={bed} />
+        ))}
       </div>
     </div>
   );

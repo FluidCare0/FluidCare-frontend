@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8001/api/',
+  baseURL: 'http://localhost:8000/api/',
   withCredentials: true,
 });
 
@@ -16,7 +16,7 @@ const processQueue = (error, token = null) => {
       prom.resolve(token);
     }
   });
-  
+
   failedQueue = [];
 };
 
@@ -53,35 +53,35 @@ api.interceptors.response.use(
 
       try {
         const res = await axios.post(
-          'http://localhost:8001/api/auth/refresh/',
+          'http://localhost:8000/api/auth/refresh/',
           {},
           { withCredentials: true }
         );
-        
+
         const newAccess = res.data.access;
         localStorage.setItem('access', newAccess);
-        
+
         // Process queued requests
         processQueue(null, newAccess);
-        
+
         // Retry original request
         originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
         return api(originalRequest);
-        
+
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
-        
+
         // Process queued requests with error
         processQueue(refreshError, null);
-        
+
         // Clear storage and redirect to login
         localStorage.removeItem('access');
-        
+
         // Only redirect if not already on login page
         if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
           window.location.href = '/';
         }
-        
+
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
