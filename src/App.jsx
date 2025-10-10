@@ -31,7 +31,7 @@ function App() {
       try {
         const refreshRes = await api.post('auth/refresh/');
         localStorage.setItem('access', refreshRes.data.access);
-        
+
         const userRes = await api.get('auth/user/');
         setUserRole(userRes.data.role);
         setStep('dashboard');
@@ -58,7 +58,7 @@ function App() {
     } catch (error) {
       console.error('Logout error:', error);
     }
-    
+
     localStorage.removeItem('access');
     setUserRole(null);
     setMobile('');
@@ -82,22 +82,7 @@ function App() {
   }
 
   if (step === 'dashboard') {
-    return (
-      <div>
-        <nav className="bg-white shadow-sm p-4">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 className="text-xl font-semibold">My App</h1>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Logout
-            </button>
-          </div>
-        </nav>
-        <Dashboard role={userRole} onLogin={handleLogin} />
-      </div>
-    );
+    return <Dashboard role={userRole} onLogout={handleLogout} />;
   }
 
   return null;
