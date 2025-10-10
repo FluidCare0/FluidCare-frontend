@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Sidebar from '../components/Sidebar';
+import NotificationSidebar from '../components/NotificationSidebar';
 import HomePage from './HomePage';
 import PatientListPage from './PatientListPage';
 import AddWardPage from './AddWardPage';
@@ -32,7 +33,7 @@ const Dashboard = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100">
-      {/* Sidebar */}
+      {/* Left Sidebar */}
       <Sidebar
         activeSection={activeSection}
         onSectionChange={setActiveSection}
@@ -45,6 +46,9 @@ const Dashboard = ({ onLogout }) => {
       <div className="flex-1 overflow-auto">
         {renderContent()}
       </div>
+
+      {/* Right Permanent Notification Sidebar */}
+      <NotificationSidebar />
     </div>
   );
 };

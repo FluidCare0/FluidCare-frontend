@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DeviceCard from '../components/DeviceCard';
+import DeviceInfoPage from './DeviceInfoPage';
 
 // Test data for IV bottles
 const generateTestData = () => [
@@ -19,7 +20,7 @@ const generateTestData = () => [
         roomNo: "102",
         patient: "Jane Smith",
         level: Math.floor(Math.random() * 100),
-        status: "Activate"
+        status: "Offline"
     },
     {
         id: 3,
@@ -37,7 +38,7 @@ const generateTestData = () => [
         roomNo: "202",
         patient: "Bob Wilson",
         level: Math.floor(Math.random() * 100),
-        status: "Activate"
+        status: "Deactivate"
     },
     {
         id: 5,
@@ -59,8 +60,9 @@ const generateTestData = () => [
     }
 ];
 
-const HomePage = () => {
+const HomePage = ({ onShowNotifications, onShowDetails }) => {
     const [devices, setDevices] = useState(generateTestData());
+    const [selectedDevice, setSelectedDevice] = useState(null);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -69,6 +71,27 @@ const HomePage = () => {
 
         return () => clearInterval(interval);
     }, []);
+
+    const handleShowDetails = (device) => {
+        setSelectedDevice(device);
+    };
+
+    const handleDisconnect = (device) => {
+        // Update device status to offline
+        setDevices(prevDevices =>
+            prevDevices.map(d =>
+                d.id === device.id ? { ...d, status: 'Offline' } : d
+            )
+        );
+    };
+
+    const handleBackToHome = () => {
+        setSelectedDevice(null);
+    };
+
+    if (selectedDevice) {
+        return <DeviceInfoPage device={selectedDevice} onBack={handleBackToHome} />;
+    }
 
     return (
         <div className="p-8">
@@ -81,7 +104,12 @@ const HomePage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {devices.map((device) => (
-                    <DeviceCard key={device.id} device={device} />
+                    <DeviceCard
+                        key={device.id}
+                        device={device}
+                        onShowDetails={handleShowDetails}
+                        onDisconnect={handleDisconnect}
+                    />
                 ))}
             </div>
         </div>
