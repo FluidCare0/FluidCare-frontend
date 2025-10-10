@@ -1,73 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
+import PatientInfo from '../components/PatientInfo';
+import { patientApiService } from '../api/patientApi';
 
 const PatientListPage = () => {
-    const [patients, setPatients] = useState([
-        {
-            id: 1,
-            name: "John Doe",
-            age: 45,
-            gender: "male",
-            contact: 9876543210,
-            admitted_at: "2023-10-15T10:30:00Z",
-            discharged_at: null,
-            floor: "Floor 1",
-            ward: "Ward A",
-            bed: "Bed 101"
-        },
-        {
-            id: 2,
-            name: "Jane Smith",
-            age: 32,
-            gender: "female",
-            contact: 9876543211,
-            admitted_at: "2023-10-16T09:15:00Z",
-            discharged_at: null,
-            floor: "Floor 2",
-            ward: "Ward B",
-            bed: "Bed 201"
-        },
-        {
-            id: 3,
-            name: "Alice Johnson",
-            age: 58,
-            gender: "female",
-            contact: 9876543212,
-            admitted_at: "2023-10-14T14:20:00Z",
-            discharged_at: "2023-10-20T11:00:00Z",
-            floor: "Floor 1",
-            ward: "Ward A",
-            bed: "Bed 102"
-        },
-        {
-            id: 4,
-            name: "Bob Wilson",
-            age: 67,
-            gender: "male",
-            contact: 9876543213,
-            admitted_at: "2023-10-17T16:45:00Z",
-            discharged_at: null,
-            floor: "Floor 3",
-            ward: "Ward C",
-            bed: "Bed 301"
-        },
-        {
-            id: 5,
-            name: "Carol Davis",
-            age: 42,
-            gender: "female",
-            contact: 9876543214,
-            admitted_at: "2023-10-18T12:30:00Z",
-            discharged_at: "2023-10-22T09:00:00Z",
-            floor: "Floor 2",
-            ward: "Ward B",
-            bed: "Bed 202"
-        }
-    ]);
+    const [patients, setPatients] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showUpdateModal, setShowUpdateModal] = useState(false);
-    const [showDischargeModal, setShowDischargeModal] = useState(false);
     const [showAllPatients, setShowAllPatients] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
@@ -85,35 +27,77 @@ const PatientListPage = () => {
         bed: ''
     });
     const [selectedPatient, setSelectedPatient] = useState(null);
+    const [showPatientInfo, setShowPatientInfo] = useState(false);
 
-    const handleAddPatient = () => {
-        if (newPatient.name && newPatient.age && newPatient.contact && newPatient.admitted_at && newPatient.floor && newPatient.ward && newPatient.bed) {
-            const patient = {
-                id: patients.length + 1,
-                ...newPatient,
-                age: parseInt(newPatient.age),
-                contact: parseInt(newPatient.contact)
-            };
-            setPatients([...patients, patient]);
-            setNewPatient({
-                name: '',
-                age: '',
-                gender: 'male',
-                contact: '',
-                admitted_at: '',
-                floor: '',
-                ward: '',
-                bed: ''
-            });
-            setShowAddModal(false);
+    useEffect(() => {
+        fetchPatients();
+    }, [showAllPatients, searchTerm, filterStatus, filterFloor, filterWard, filterGender]);
+
+    const fetchPatients = async () => {
+        try {
+            setLoading(true);
+            const filters = {};
+            if (searchTerm) filters.search = searchTerm;
+            if (filterStatus !== 'all') filters.status = filterStatus;
+            if (filterGender) filters.gender = filterGender;
+
+            const data = await patientApiService.getAllPatients(filters);
+            setPatients(data);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching patients:', err);
+            setError('Failed to load patients');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleDischargePatient = (id) => {
-        setPatients(patients.map(patient =>
-            patient.id === id ? { ...patient, discharged_at: new Date().toISOString() } : patient
-        ));
-        setShowDischargeModal(false);
+    const handleAddPatient = async () => {
+        if (newPatient.name && newPatient.age && newPatient.contact && newPatient.admitted_at && newPatient.floor && newPatient.ward && newPatient.bed) {
+            try {
+                const patientData = {
+                    ...newPatient,
+                    age: parseInt(newPatient.age),
+                    contact: parseInt(newPatient.contact)
+                };
+
+                const newPatientData = await patientApiService.createPatient(patientData);
+                setPatients([...patients, newPatientData]);
+                setNewPatient({
+                    name: '',
+                    age: '',
+                    gender: 'male',
+                    contact: '',
+                    admitted_at: '',
+                    floor: '',
+                    ward: '',
+                    bed: ''
+                });
+                setShowAddModal(false);
+            } catch (err) {
+                console.error('Error adding patient:', err);
+                setError('Failed to add patient');
+            }
+        }
+    };
+
+    const handleDischargePatient = async (id) => {
+        try {
+            const dischargeData = { discharged_at: new Date().toISOString() };
+            const updatedPatient = await patientApiService.dischargePatient(id, dischargeData);
+
+            setPatients(patients.map(patient =>
+                patient.id === id ? updatedPatient : patient
+            ));
+
+            if (showPatientInfo && selectedPatient && selectedPatient.id === id) {
+                setShowPatientInfo(false);
+                setSelectedPatient(null);
+            }
+        } catch (err) {
+            console.error('Error discharging patient:', err);
+            setError('Failed to discharge patient');
+        }
     };
 
     const getGenderDisplay = (gender) => {
@@ -145,9 +129,9 @@ const PatientListPage = () => {
             patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             patient.id.toString().includes(searchTerm) ||
             patient.contact.toString().includes(searchTerm) ||
-            patient.floor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            patient.ward.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            patient.bed.toLowerCase().includes(searchTerm.toLowerCase())
+            patient.floor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            patient.ward?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            patient.bed?.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }
 
@@ -173,8 +157,36 @@ const PatientListPage = () => {
     const uniqueWards = [...new Set(patients.map(p => p.ward))];
     const uniqueGenders = [...new Set(patients.map(p => p.gender))];
 
+    if (showPatientInfo && selectedPatient) {
+        return (
+            <PatientInfo
+                patient={selectedPatient}
+                onBack={() => {
+                    setShowPatientInfo(false);
+                    setSelectedPatient(null);
+                }}
+                onDischarge={handleDischargePatient}
+            />
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="text-lg text-gray-600">Loading patients...</div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-8">
+            {/* Error Message */}
+            {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                    {error}
+                </div>
+            )}
+
             {/* Three Cards Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {/* Add New Patient Card */}
@@ -352,24 +364,28 @@ const PatientListPage = () => {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.discharged_at
-                                                ? 'bg-red-100 text-red-800'
-                                                : 'bg-green-100 text-green-800'
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-green-100 text-green-800'
                                             }`}>
                                             {patient.discharged_at ? 'Discharged' : 'Active'}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        {!patient.discharged_at && (
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedPatient(patient);
-                                                    setShowDischargeModal(true);
-                                                }}
-                                                className="text-red-600 hover:text-red-900"
-                                            >
-                                                Discharge
-                                            </button>
-                                        )}
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const patientDetail = await patientApiService.getPatientDetail(patient.id);
+                                                    setSelectedPatient(patientDetail);
+                                                    setShowPatientInfo(true);
+                                                } catch (err) {
+                                                    console.error('Error fetching patient detail:', err);
+                                                    setError('Failed to load patient details');
+                                                }
+                                            }}
+                                            className="text-blue-600 hover:text-blue-900"
+                                        >
+                                            Info
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -567,40 +583,6 @@ const PatientListPage = () => {
                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                             >
                                 Update Location
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Discharge Patient Modal */}
-            {showDischargeModal && selectedPatient && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Discharge Patient</h3>
-
-                        <div className="mb-4">
-                            <p className="text-gray-600">Are you sure you want to discharge the following patient?</p>
-                            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                <p className="font-medium">{selectedPatient.name}</p>
-                                <p className="text-sm text-gray-600">ID: {selectedPatient.id}</p>
-                                <p className="text-sm text-gray-600">Admitted: {formatDate(selectedPatient.admitted_at)}</p>
-                                <p className="text-sm text-gray-600">Location: {selectedPatient.floor}, {selectedPatient.ward}, {selectedPatient.bed}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3 mt-6">
-                            <button
-                                onClick={() => setShowDischargeModal(false)}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => handleDischargePatient(selectedPatient.id)}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                            >
-                                Confirm Discharge
                             </button>
                         </div>
                     </div>

@@ -1,73 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card from '../components/Card';
+import { hospitalApiService } from '../api/hospitalApi';
 
 const AddWardPage = () => {
-    // Mock data matching your database structure
-    const [floors, setFloors] = useState([
-        {
-            id: 1,
-            floor_number: 1,
-            name: "Main Floor",
-            description: "Main floor with ICU and Emergency wards",
-            wards: [
-                {
-                    id: 1,
-                    floor: 1,
-                    ward_number: 1,
-                    name: "ICU",
-                    description: "Intensive Care Unit",
-                    beds: [
-                        { id: 1, ward: 1, bed_number: 1, is_occupied: true },
-                        { id: 2, ward: 1, bed_number: 2, is_occupied: true },
-                        { id: 3, ward: 1, bed_number: 3, is_occupied: false },
-                    ]
-                },
-                {
-                    id: 2,
-                    floor: 1,
-                    ward_number: 2,
-                    name: "Emergency",
-                    description: "Emergency Department",
-                    beds: [
-                        { id: 4, ward: 2, bed_number: 4, is_occupied: false },
-                        { id: 5, ward: 2, bed_number: 5, is_occupied: true },
-                    ]
-                }
-            ]
-        },
-        {
-            id: 2,
-            floor_number: 2,
-            name: "Second Floor",
-            description: "Second floor with General Wards",
-            wards: [
-                {
-                    id: 3,
-                    floor: 2,
-                    ward_number: 3,
-                    name: "General Ward A",
-                    description: "General patient care",
-                    beds: [
-                        { id: 6, ward: 3, bed_number: 6, is_occupied: false },
-                        { id: 7, ward: 3, bed_number: 7, is_occupied: true },
-                    ]
-                },
-                {
-                    id: 4,
-                    floor: 2,
-                    ward_number: 4,
-                    name: "General Ward B",
-                    description: "General patient care",
-                    beds: [
-                        { id: 8, ward: 4, bed_number: 8, is_occupied: true },
-                        { id: 9, ward: 4, bed_number: 9, is_occupied: false },
-                    ]
-                }
-            ]
-        }
-    ]);
+    const [floors, setFloors] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     const [showAddModal, setShowAddModal] = useState({ type: null, visible: false });
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState({ type: null, visible: false, id: null });
     const [newItem, setNewItem] = useState({
         floor_name: '',
         ward_name: '',
@@ -76,70 +17,154 @@ const AddWardPage = () => {
         ward_id: null
     });
 
-    const handleAddFloor = () => {
-        const newFloor = {
-            id: floors.length + 1,
-            floor_number: floors.length + 1,
-            name: newItem.floor_name || `Floor ${floors.length + 1}`,
-            description: `Floor ${floors.length + 1}`,
-            wards: []
-        };
-        setFloors([...floors, newFloor]);
-        setNewItem({ ...newItem, floor_name: '' });
-        setShowAddModal({ type: null, visible: false });
+    useEffect(() => {
+        fetchFloors();
+    }, []);
+
+    const fetchFloors = async () => {
+        try {
+            setLoading(true);
+            const data = await hospitalApiService.getAllFloors();
+            setFloors(data);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching floors:', err);
+            setError('Failed to load hospital structure');
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleAddWard = (floorId) => {
-        const floor = floors.find(f => f.id === floorId);
-        const newWard = {
-            id: Math.max(...floors.flatMap(f => f.wards.map(w => w.id))) + 1,
-            floor: floorId,
-            ward_number: floor.wards.length + 1,
-            name: newItem.ward_name || `Ward ${floor.wards.length + 1}`,
-            description: `Ward ${floor.wards.length + 1}`,
-            beds: []
-        };
-        setFloors(floors.map(floor =>
-            floor.id === floorId
-                ? { ...floor, wards: [...floor.wards, newWard] }
-                : floor
-        ));
-        setNewItem({ ...newItem, ward_name: '' });
-        setShowAddModal({ type: null, visible: false });
+    const handleAddFloor = async () => {
+        try {
+            const floorData = {
+                floor_number: floors.length + 1,
+                name: newItem.floor_name || `Floor ${floors.length + 1}`,
+                description: `Floor ${floors.length + 1}`
+            };
+            const newFloor = await hospitalApiService.createFloor(floorData);
+            setFloors([...floors, newFloor]);
+            setNewItem({ ...newItem, floor_name: '' });
+            setShowAddModal({ type: null, visible: false });
+        } catch (err) {
+            console.error('Error adding floor:', err);
+            setError('Failed to add floor');
+        }
     };
 
-    const handleAddBed = (wardId) => {
-        const newBed = {
-            id: Math.max(...floors.flatMap(f => f.wards.flatMap(w => w.beds.map(b => b.id)))) + 1,
-            ward: wardId,
-            bed_number: 1,
-            is_occupied: false
-        };
-        setFloors(floors.map(floor => ({
-            ...floor,
-            wards: floor.wards.map(ward =>
-                ward.id === wardId
-                    ? { ...ward, beds: [...ward.beds, newBed] }
-                    : ward
-            )
-        })));
-        setShowAddModal({ type: null, visible: false });
+    const handleAddWard = async (floorId) => {
+        try {
+            const floor = floors.find(f => f.id === floorId);
+            const wardData = {
+                floor: floorId,
+                ward_number: floor.wards.length + 1,
+                name: newItem.ward_name || `Ward ${floor.wards.length + 1}`,
+                description: `Ward ${floor.wards.length + 1}`
+            };
+            const newWard = await hospitalApiService.createWard(wardData);
+
+            setFloors(floors.map(floor =>
+                floor.id === floorId
+                    ? { ...floor, wards: [...floor.wards, newWard] }
+                    : floor
+            ));
+            setNewItem({ ...newItem, ward_name: '' });
+            setShowAddModal({ type: null, visible: false });
+        } catch (err) {
+            console.error('Error adding ward:', err);
+            setError('Failed to add ward');
+        }
     };
 
-    const handleDeleteFloor = (floorId) => {
-        setFloors(floors.filter(floor => floor.id !== floorId));
+    const handleAddBed = async (wardId) => {
+        try {
+            const bedData = {
+                ward: wardId,
+                bed_number: parseInt(newItem.bed_number) || 1,
+                is_occupied: false
+            };
+            const newBed = await hospitalApiService.createBed(bedData);
+
+            setFloors(floors.map(floor => ({
+                ...floor,
+                wards: floor.wards.map(ward =>
+                    ward.id === wardId
+                        ? { ...ward, beds: [...ward.beds, newBed] }
+                        : ward
+                )
+            })));
+            setShowAddModal({ type: null, visible: false });
+        } catch (err) {
+            console.error('Error adding bed:', err);
+            setError('Failed to add bed');
+        }
     };
 
-    const handleDeleteWard = (wardId) => {
-        setFloors(floors.map(floor => ({
-            ...floor,
-            wards: floor.wards.filter(ward => ward.id !== wardId)
-        })));
+    const handleDeleteFloor = async (floorId) => {
+        try {
+            await hospitalApiService.deleteFloor(floorId);
+            setFloors(floors.filter(floor => floor.id !== floorId));
+            setShowDeleteConfirm({ type: null, visible: false, id: null });
+        } catch (err) {
+            console.error('Error deleting floor:', err);
+            setError('Failed to delete floor');
+        }
     };
+
+    const handleDeleteWard = async (wardId) => {
+        try {
+            await hospitalApiService.deleteWard(wardId);
+            setFloors(floors.map(floor => ({
+                ...floor,
+                wards: floor.wards.filter(ward => ward.id !== wardId)
+            })));
+            setShowDeleteConfirm({ type: null, visible: false, id: null });
+        } catch (err) {
+            console.error('Error deleting ward:', err);
+            setError('Failed to delete ward');
+        }
+    };
+
+    const handleToggleBedStatus = async (bed) => {
+        try {
+            const updatedBed = await hospitalApiService.updateBedStatus(bed.id, !bed.is_occupied);
+
+            setFloors(floors.map(floor => ({
+                ...floor,
+                wards: floor.wards.map(ward =>
+                    ward.id === bed.ward
+                        ? {
+                            ...ward,
+                            beds: ward.beds.map(b =>
+                                b.id === bed.id ? updatedBed : b
+                            )
+                        }
+                        : ward
+                )
+            })));
+        } catch (err) {
+            console.error('Error updating bed status:', err);
+            setError('Failed to update bed status');
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+                <div className="text-lg text-gray-600">Loading hospital structure...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-8 bg-gray-50 min-h-screen">
             <h2 className="text-3xl font-bold text-gray-800 mb-6">Hospital Bed Management</h2>
+
+            {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                    {error}
+                </div>
+            )}
 
             {/* Add Floor Button */}
             <div className="mb-6">
@@ -172,7 +197,7 @@ const AddWardPage = () => {
                                 </button>
                             </div>
                             <button
-                                onClick={() => handleDeleteFloor(floor.id)}
+                                onClick={() => setShowDeleteConfirm({ type: 'floor', visible: true, id: floor.id })}
                                 className="px-3 py-1 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-1"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,10 +229,14 @@ const AddWardPage = () => {
                                     {/* Bed List */}
                                     <div className="space-y-2">
                                         {ward.beds.map(bed => (
-                                            <div key={bed.id} className={`p-2 rounded-md text-sm ${bed.is_occupied
-                                                    ? 'bg-red-100 border-red-300 text-red-800'
-                                                    : 'bg-green-100 border-green-300 text-green-800'
-                                                }`}>
+                                            <div
+                                                key={bed.id}
+                                                className={`p-2 rounded-md text-sm cursor-pointer ${bed.is_occupied
+                                                        ? 'bg-red-100 border-red-300 text-red-800 hover:bg-red-200'
+                                                        : 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
+                                                    }`}
+                                                onClick={() => handleToggleBedStatus(bed)}
+                                            >
                                                 <div className="flex items-center gap-2">
                                                     <div className={`w-3 h-3 rounded-full ${bed.is_occupied ? 'bg-red-500' : 'bg-green-500'}`}></div>
                                                     <span>Bed {bed.bed_number}</span>
@@ -218,6 +247,16 @@ const AddWardPage = () => {
                                             </div>
                                         ))}
                                     </div>
+
+                                    <button
+                                        onClick={() => setShowDeleteConfirm({ type: 'ward', visible: true, id: ward.id })}
+                                        className="mt-3 w-full px-2 py-1 bg-red-100 text-red-700 rounded-md text-xs font-medium hover:bg-red-200 transition-colors flex items-center justify-center gap-1"
+                                    >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995 5.11L5 12m2 0l2-2h2l2 2" />
+                                        </svg>
+                                        Delete Ward
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -294,6 +333,45 @@ const AddWardPage = () => {
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                             >
                                 Add {showAddModal.type === 'floor' ? 'Floor' : showAddModal.type === 'ward' ? 'Ward' : 'Bed'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm.visible && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                            Confirm Deletion
+                        </h3>
+
+                        <div className="mb-4">
+                            <p className="text-gray-600">
+                                Are you sure you want to delete this {showDeleteConfirm.type}?
+                                This action cannot be undone and will remove all associated data.
+                            </p>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={() => setShowDeleteConfirm({ type: null, visible: false, id: null })}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (showDeleteConfirm.type === 'floor') {
+                                        handleDeleteFloor(showDeleteConfirm.id);
+                                    } else if (showDeleteConfirm.type === 'ward') {
+                                        handleDeleteWard(showDeleteConfirm.id);
+                                    }
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                                Delete {showDeleteConfirm.type === 'floor' ? 'Floor' : 'Ward'}
                             </button>
                         </div>
                     </div>
