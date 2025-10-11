@@ -1,3 +1,4 @@
+// ../api/patientApi.js
 import api from './api';
 
 export const patientApiService = {
@@ -39,6 +40,29 @@ export const patientApiService = {
 
     getAllPatientsWithHistory: async () => {
         const response = await api.get('/hospital/patients/with-history/');
+        return response.data;
+    },
+
+    getHospitalStructure: async () => {
+        const response = await api.get('/hospital/structure/'); // Use the URL from your hospital_app/urls.py
+        return response.data;
+    },
+
+    // --- New API function for assigning patient to a bed ---
+    assignPatientToBed: async (patientId, bedId) => {
+        const response = await api.post(`/hospital/patients/${patientId}/assign-bed/`, {
+            bed_id: bedId
+        });
+        return response.data; // This should return the updated patient detail
+    },
+    getDeviceBedHistory: async (patientId) => {
+        const response = await api.get(`/hospital/patients/${patientId}/device-history/`);
+        return response.data;
+    },
+
+    // --- New API function for getting device history by device ID ---
+    getDeviceHistoryByDeviceId: async (deviceId) => {
+        const response = await api.get(`/hospital/devices/${deviceId}/bed-history/`);
         return response.data;
     }
 };
