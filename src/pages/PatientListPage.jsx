@@ -15,15 +15,17 @@ const PatientListPage = () => {
     const [filterFloor, setFilterFloor] = useState('');
     const [filterWard, setFilterWard] = useState('');
     const [filterGender, setFilterGender] = useState('');
+    // --- Add back floor, ward, bed to newPatient state ---
     const [newPatient, setNewPatient] = useState({
         name: '',
         age: '',
         gender: 'male',
         contact: '',
-        admitted_at: '',
         floor: '', // These will now be IDs
         ward: '',  // These will now be IDs
-        bed: ''    // These will now be IDs
+        bed: '',   // These will now be IDs
+        // Keep admitted_at in state to allow user input if needed, or remove it if always current time
+        // For this example, we'll keep it so the user can see the default value set in handleAddPatient
     });
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [showPatientInfo, setShowPatientInfo] = useState(false);
@@ -74,30 +76,51 @@ const PatientListPage = () => {
     };
 
     const handleAddPatient = async () => {
-        if (newPatient.name && newPatient.age && newPatient.contact && newPatient.admitted_at && newPatient.floor && newPatient.ward && newPatient.bed) {
+        // Check for required fields including floor, ward, bed
+        if (newPatient.name && newPatient.age && newPatient.contact && newPatient.floor && newPatient.ward && newPatient.bed) {
             try {
+                // 1. Prepare patient data for creation (excluding floor, ward, bed)
                 const patientData = {
-                    ...newPatient,
+                    name: newPatient.name,
                     age: parseInt(newPatient.age),
-                    contact: parseInt(newPatient.contact)
+                    gender: newPatient.gender,
+                    contact: parseInt(newPatient.contact),
+                    // Automatically set admitted_at to current time
+                    admitted_at: new Date().toISOString(),
+                    // Do not include floor, ward, bed in this object
                 };
 
+                // 2. Create the patient
                 const newPatientData = await patientApiService.createPatient(patientData);
-                setPatients([...patients, newPatientData]);
+
+                // 3. Assign the patient to the selected bed using the assignPatientToBed API
+                // The newPatient.bed value should be the Bed ID from the dropdown
+                await patientApiService.assignPatientToBed(newPatientData.id, parseInt(newPatient.bed));
+
+                // 4. Fetch the updated patient details to reflect the location
+                const updatedPatientDetail = await patientApiService.getPatientDetail(newPatientData.id);
+
+                // 5. Update the local state
+                setPatients([...patients, updatedPatientDetail]);
                 setNewPatient({
                     name: '',
                     age: '',
                     gender: 'male',
                     contact: '',
-                    admitted_at: '',
-                    floor: '',
+                    floor: '', // Reset the new fields too
                     ward: '',
                     bed: ''
                 });
                 setShowAddModal(false);
             } catch (err) {
-                console.error('Error adding patient:', err);
-                setError('Failed to add patient');
+                console.error('Error adding patient or assigning bed:', err);
+                // Provide more specific error feedback if needed
+                if (err.response && err.response.status === 400) {
+                    // Handle specific backend validation errors (e.g., bed occupied)
+                    alert(`Failed to add patient: ${err.response.data.error || 'Bad Request'}`);
+                } else {
+                    alert('Failed to add patient or assign bed. Please try again.');
+                }
             }
         }
     };
@@ -646,13 +669,14 @@ const PatientListPage = () => {
                                 </div>
                             </div>
 
+                            {/* Optional: Display the auto-set admission time */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Admission Date & Time</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Admission Date & Time (Auto-set)</label>
                                 <input
                                     type="datetime-local"
-                                    value={newPatient.admitted_at}
-                                    onChange={(e) => setNewPatient({ ...newPatient, admitted_at: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    value={new Date().toISOString().slice(0, 16)} // Show current time, but user cannot edit
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                                    readOnly
                                 />
                             </div>
                         </div>

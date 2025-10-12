@@ -7,7 +7,6 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import ManageStaffPage from './pages/ManageStaffPage';
 import HistoryPage from './pages/HistoryPage';
 
-// Main Dashboard Component
 const Dashboard = () => {
     const [activeSection, setActiveSection] = useState('home');
 

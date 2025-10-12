@@ -28,6 +28,11 @@ export const patientApiService = {
         return response.data;
     },
 
+    updatePatient: async (patientId, patientData) => {
+        const response = await api.put(`/hospital/patients/${patientId}/`, patientData);
+        return response.data;
+    },
+
     getPatientBedHistory: async (patientId) => {
         const response = await api.get(`/hospital/patients/${patientId}/bed-history/`);
         return response.data;
@@ -54,15 +59,7 @@ export const patientApiService = {
             bed_id: bedId
         });
         return response.data; // This should return the updated patient detail
-    },
-    getDeviceBedHistory: async (patientId) => {
-        const response = await api.get(`/hospital/patients/${patientId}/device-history/`);
-        return response.data;
-    },
-
-    // --- New API function for getting device history by device ID ---
-    getDeviceHistoryByDeviceId: async (deviceId) => {
-        const response = await api.get(`/hospital/devices/${deviceId}/bed-history/`);
-        return response.data;
     }
+
+
 };

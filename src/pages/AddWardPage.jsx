@@ -125,28 +125,7 @@ const AddWardPage = () => {
         }
     };
 
-    const handleToggleBedStatus = async (bed) => {
-        try {
-            const updatedBed = await hospitalApiService.updateBedStatus(bed.id, !bed.is_occupied);
-
-            setFloors(floors.map(floor => ({
-                ...floor,
-                wards: floor.wards.map(ward =>
-                    ward.id === bed.ward
-                        ? {
-                            ...ward,
-                            beds: ward.beds.map(b =>
-                                b.id === bed.id ? updatedBed : b
-                            )
-                        }
-                        : ward
-                )
-            })));
-        } catch (err) {
-            console.error('Error updating bed status:', err);
-            setError('Failed to update bed status');
-        }
-    };
+    // --- REMOVED handleToggleBedStatus function ---
 
     if (loading) {
         return (
@@ -226,16 +205,16 @@ const AddWardPage = () => {
                                         </button>
                                     </div>
 
-                                    {/* Bed List */}
+                                    {/* Bed List - Now purely display status, no click action for toggling */}
                                     <div className="space-y-2">
                                         {ward.beds.map(bed => (
                                             <div
                                                 key={bed.id}
-                                                className={`p-2 rounded-md text-sm cursor-pointer ${bed.is_occupied
-                                                        ? 'bg-red-100 border-red-300 text-red-800 hover:bg-red-200'
-                                                        : 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
+                                                // Removed onClick handler
+                                                className={`p-2 rounded-md text-sm ${bed.is_occupied
+                                                    ? 'bg-red-100 border-red-300 text-red-800'
+                                                    : 'bg-green-100 border-green-300 text-green-800'
                                                     }`}
-                                                onClick={() => handleToggleBedStatus(bed)}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <div className={`w-3 h-3 rounded-full ${bed.is_occupied ? 'bg-red-500' : 'bg-green-500'}`}></div>

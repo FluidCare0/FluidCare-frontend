@@ -1,289 +1,853 @@
-// DeviceInfoPage.jsx
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { patientApiService } from '../api/patientApi'; // Import the API service
+import Card from './Card';
+import { patientApiService } from '../api/patientApi';
 
-const DeviceInfoPage = ({ device, onBack }) => {
-    const [showAdvanced, setShowAdvanced] = useState(false);
-    const [patientBedHistory, setPatientBedHistory] = useState([]);
-    const [deviceBedHistory, setDeviceBedHistory] = useState([]); // This will now hold history for the specific device
-    const [loadingHistory, setLoadingHistory] = useState(false);
-    const [error, setError] = useState(null);
+const PatientInfo = ({ patient, onBack, onDischarge }) => {
+    const [patientDetail, setPatientDetail] = useState(patient);
+    const [loading, setLoading] = useState(false);
+    const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
 
-    // Mock data for fluid level history (remains the same)
-    const fluidLevelHistory = [
-        { time: '08:00', level: 95 },
-        { time: '09:00', level: 85 },
-        { time: '10:00', level: 75 },
-        { time: '11:00', level: 65 },
-        { time: '12:00', level: 55 },
-        { time: '13:00', level: 45 },
-        { time: '14:00', level: 35 },
-        { time: '15:00', level: 25 },
-        { time: '16:00', level: 15 },
-        { time: '17:00', level: 5 },
-    ];
+    // --- State for Update Modals ---
+    const [showUpdatePersonalModal, setShowUpdatePersonalModal] = useState(false);
+    const [showUpdateLocationModal, setShowUpdateLocationModal] = useState(false);
+    const [showUpdateAdmissionModal, setShowUpdateAdmissionModal] = useState(false);
 
-    // Mock data for patient info (remains the same, or derive from device prop if possible)
-    // In a real scenario, you might fetch patient details separately if only device ID is provided initially.
-    const patientInfo = {
-        name: device.patient, // Assuming device object has patient name
-        age: 45,
-        gender: 'Male',
-        admissionDate: '2023-10-15',
-        diagnosis: 'Post-operative care',
-        attendingDoctor: 'Dr. Smith',
-        room: device.roomNo,
-        ward: device.wardNo
-    };
+    // --- State for Update Data ---
+    const [personalData, setPersonalData] = useState({
+        name: patient.name,
+        age: patient.age,
+        gender: patient.gender,
+        contact: patient.contact,
+    });
 
-    // Fetch history data when the component mounts or when device changes
+    const [locationData, setLocationData] = useState({
+        floor: patient.current_floor || patient.floor || null,
+        ward: patient.current_ward || patient.ward || null,
+        bed: patient.current_bed || patient.bed || null,
+    });
+    const [selectedFloor, setSelectedFloor] = useState(locationData.floor);
+    const [selectedWard, setSelectedWard] = useState(locationData.ward);
+    const [selectedBed, setSelectedBed] = useState(locationData.bed);
+
+    const [admissionData, setAdmissionData] = useState({
+        admitted_at: patient.admitted_at,
+        discharged_at: patient.discharged_at,
+    });
+
+    // --- State for Hospital Structure (for location modal) ---
+    const [hospitalStructure, setHospitalStructure] = useState([]);
+    const [availableBeds, setAvailableBeds] = useState([]);
+    const [loadingStructure, setLoadingStructure] = useState(false);
+
+    // --- State for Errors ---
+    const [personalErrors, setPersonalErrors] = useState({});
+    const [locationErrors, setLocationErrors] = useState({});
+    const [admissionErrors, setAdmissionErrors] = useState({});
+
+    // Fetch hospital structure for location dropdowns
     useEffect(() => {
-        const fetchHistoryData = async () => {
-            if (!device.id) { // Ensure device ID is available
-                console.error("Device object does not contain id. Cannot fetch device history.");
-                setError("Device information is incomplete. Device history unavailable.");
-                return;
-            }
-
-            setLoadingHistory(true);
-            setError(null);
-            try {
-                // Fetch patient bed history for the associated patient (if patient_id exists)
-                let patientHistory = [];
-                if (device.patient_id) {
-                    patientHistory = await patientApiService.getPatientBedHistory(device.patient_id);
-                } else {
-                    console.warn("Device object does not contain patient_id. Skipping patient bed history fetch.");
+        const fetchStructure = async () => {
+            if (showUpdateLocationModal) {
+                try {
+                    setLoadingStructure(true);
+                    const structure = await patientApiService.getHospitalStructure();
+                    setHospitalStructure(structure);
+                } catch (error) {
+                    console.error('Error fetching hospital structure:', error);
+                    alert('Failed to load hospital structure.');
+                } finally {
+                    setLoadingStructure(false);
                 }
-                setPatientBedHistory(patientHistory);
-
-                // Fetch device bed history for this specific device using the new API function
-                const deviceHistory = await patientApiService.getDeviceHistoryByDeviceId(device.id);
-                setDeviceBedHistory(deviceHistory);
-
-            } catch (err) {
-                console.error('Error fetching history ', err);
-                setError('Failed to load history: ' + (err.response?.data?.error || err.message || 'Unknown error'));
-                // Optionally, set empty arrays or keep previous data
-                setPatientBedHistory([]);
-                setDeviceBedHistory([]);
-            } finally {
-                setLoadingHistory(false);
             }
         };
+        fetchStructure();
+    }, [showUpdateLocationModal]);
 
-        fetchHistoryData();
-    }, [device.patient_id, device.id]); // Fetch when patient_id or device.id changes
+    // Update available beds when floor or ward changes in location modal
+    useEffect(() => {
+        if (hospitalStructure.length > 0) {
+            let filteredBeds = [];
+            if (selectedFloor) {
+                const floor = hospitalStructure.find(f => f.floor_number === selectedFloor);
+                if (floor) {
+                    if (selectedWard) {
+                        const ward = floor.wards.find(w => w.ward_number === selectedWard);
+                        if (ward) {
+                            // Filter beds: unoccupied OR the currently assigned bed (so user can select it again if needed)
+                            // Handle case where patientDetail.current_bed might be null/undefined
+                            const currentBedNumber = patientDetail.current_bed || patientDetail.bed;
+                            // If currentBedNumber is null/undefined, we want to show all unoccupied beds.
+                            // Otherwise, show unoccupied beds AND the current bed.
+                            if (currentBedNumber == null) {
+                                filteredBeds = ward.beds.filter(b => !b.is_occupied);
+                            } else {
+                                filteredBeds = ward.beds.filter(b => !b.is_occupied || b.bed_number === currentBedNumber);
+                            }
+                        }
+                    } else {
+                        // If no specific ward selected, show all unoccupied beds in the selected floor
+                        floor.wards.forEach(ward => {
+                            const currentBedNumber = patientDetail.current_bed || patientDetail.bed;
+                            if (currentBedNumber == null) {
+                                // Show all unoccupied beds in this ward
+                                filteredBeds = [...filteredBeds, ...ward.beds.filter(b => !b.is_occupied)];
+                            } else {
+                                // Show unoccupied beds and the current bed in this ward
+                                const wardBeds = ward.beds.filter(b => !b.is_occupied || b.bed_number === currentBedNumber);
+                                filteredBeds = [...filteredBeds, ...wardBeds];
+                            }
+                        });
+                    }
+                }
+            } else {
+                // If no floor selected, show all unoccupied beds in the hospital
+                hospitalStructure.forEach(floor => {
+                    floor.wards.forEach(ward => {
+                        const currentBedNumber = patientDetail.current_bed || patientDetail.bed;
+                        if (currentBedNumber == null) {
+                            // Show all unoccupied beds in this ward
+                            filteredBeds = [...filteredBeds, ...ward.beds.filter(b => !b.is_occupied)];
+                        } else {
+                            // Show unoccupied beds and the current bed in this ward
+                            const wardBeds = ward.beds.filter(b => !b.is_occupied || b.bed_number === currentBedNumber);
+                            filteredBeds = [...filteredBeds, ...wardBeds];
+                        }
+                    });
+                });
+            }
+            setAvailableBeds(filteredBeds);
+        } else {
+            // If structure is empty, reset available beds
+            setAvailableBeds([]);
+        }
+    }, [hospitalStructure, selectedFloor, selectedWard, patientDetail.current_bed, patientDetail.bed]);
 
-    // Helper function to get user display name safely
-    const getUserDisplayName = (user) => {
-        if (!user) return 'Unknown User';
-        return user.name || 'Unnamed User';
+    // Initialize location data when location modal opens
+    useEffect(() => {
+        if (showUpdateLocationModal) {
+            // Fetch latest patient detail to ensure current location is up-to-date
+            const fetchLatestPatientDetail = async () => {
+                try {
+                    const latestPatientDetail = await patientApiService.getPatientDetail(patient.id);
+                    setPatientDetail(latestPatientDetail);
+
+                    // Set initial state based on the latest fetched detail
+                    const initialFloor = latestPatientDetail.current_floor || latestPatientDetail.floor || null;
+                    const initialWard = latestPatientDetail.current_ward || latestPatientDetail.ward || null;
+                    const initialBed = latestPatientDetail.current_bed || latestPatientDetail.bed || null;
+
+                    setLocationData({
+                        floor: initialFloor,
+                        ward: initialWard,
+                        bed: initialBed,
+                    });
+                    setSelectedFloor(initialFloor);
+                    setSelectedWard(initialWard);
+                    setSelectedBed(initialBed);
+                    setLocationErrors({});
+                } catch (err) {
+                    console.error('Error fetching latest patient detail for update:', err);
+                    // Fallback to the initial patient prop if fetch fails
+                    const initialFloor = patient.current_floor || patient.floor || null;
+                    const initialWard = patient.current_ward || patient.ward || null;
+                    const initialBed = patient.current_bed || patient.bed || null;
+
+                    setLocationData({
+                        floor: initialFloor,
+                        ward: initialWard,
+                        bed: initialBed,
+                    });
+                    setSelectedFloor(initialFloor);
+                    setSelectedWard(initialWard);
+                    setSelectedBed(initialBed);
+                    setLocationErrors({});
+                }
+            };
+
+            fetchLatestPatientDetail();
+        }
+    }, [showUpdateLocationModal, patient.id, patient.current_floor, patient.current_ward, patient.current_bed, patient.floor, patient.ward, patient.bed]);
+
+    // Initialize admission data when admission modal opens
+    useEffect(() => {
+        if (showUpdateAdmissionModal) {
+            setAdmissionData({
+                admitted_at: patientDetail.admitted_at,
+                discharged_at: patientDetail.discharged_at,
+            });
+            setAdmissionErrors({});
+        }
+    }, [showUpdateAdmissionModal, patientDetail]);
+
+    const getGenderDisplay = (gender) => {
+        switch (gender.toLowerCase()) {
+            case 'male':
+                return 'Male';
+            case 'female':
+                return 'Female';
+            case 'other':
+                return 'Other';
+            default:
+                return gender;
+        }
     };
 
-    // Helper function to get bed display name safely
-    const getBedDisplayName = (bed) => {
-        if (!bed) return 'Unknown Bed';
-        return `Bed ${bed.bed_number} - Ward ${bed.ward.ward_number}`;
-    };
-
-    // Helper function to format date safely
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         const date = new Date(dateString);
-        return date.toLocaleString(); // Example: "10/11/2025, 2:30:00 PM"
+        // Use toLocaleString for a more readable date and time format
+        return date.toLocaleString(); // e.g., "10/12/2025, 2:30:45 PM"
+    };
+
+    const handleDischarge = () => {
+        onDischarge(patient.id);
+        setShowDischargeConfirm(false);
+    };
+
+    // --- Personal Info Modal Handlers ---
+    const handleOpenUpdatePersonalModal = () => {
+        setPersonalData({
+            name: patientDetail.name,
+            age: patientDetail.age,
+            gender: patientDetail.gender,
+            contact: patientDetail.contact,
+        });
+        setPersonalErrors({});
+        setShowUpdatePersonalModal(true);
+    };
+
+    const handleCloseUpdatePersonalModal = () => {
+        setShowUpdatePersonalModal(false);
+        setPersonalErrors({});
+    };
+
+    const handlePersonalInputChange = (e) => {
+        const { name, value } = e.target;
+        setPersonalData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const validatePersonalForm = () => {
+        const newErrors = {};
+        if (!personalData.name?.trim()) newErrors.name = 'Name is required';
+        if (!personalData.age || personalData.age <= 0) newErrors.age = 'Valid age is required';
+        if (!personalData.gender) newErrors.gender = 'Gender is required';
+        if (!String(personalData.contact).trim()) newErrors.contact = 'Contact is required';
+        setPersonalErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleUpdatePersonalSubmit = async () => {
+        if (!validatePersonalForm()) return;
+
+        try {
+            setLoading(true);
+            const updatedPatient = await patientApiService.updatePatient(patientDetail.id, personalData);
+            setPatientDetail(updatedPatient);
+            handleCloseUpdatePersonalModal();
+        } catch (error) {
+            console.error('Error updating personal info:', error);
+            alert('Failed to update personal information. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Location Modal Handlers ---
+    const handleOpenUpdateLocationModal = () => {
+        setShowUpdateLocationModal(true);
+    };
+
+    const handleCloseUpdateLocationModal = () => {
+        setShowUpdateLocationModal(false);
+        setLocationErrors({});
+        // Reset selections when closing modal
+        setSelectedFloor(locationData.floor);
+        setSelectedWard(locationData.ward);
+        setSelectedBed(locationData.bed);
+    };
+
+    const handleLocationChange = (e) => {
+        const { name, value } = e.target;
+        if (name === 'floor') {
+            setSelectedFloor(value);
+            setSelectedWard(''); // Reset ward when floor changes
+            setSelectedBed(''); // Reset bed when floor changes
+        } else if (name === 'ward') {
+            setSelectedWard(value);
+            setSelectedBed(''); // Reset bed when ward changes
+        } else if (name === 'bed') {
+            setSelectedBed(value);
+        }
+    };
+
+    const validateLocationForm = () => {
+        const newErrors = {};
+        if ((selectedFloor || selectedWard || selectedBed) && !selectedBed) {
+            newErrors.location = 'Please select a specific bed.';
+        }
+        setLocationErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleUpdateLocationSubmit = async () => {
+        if (!validateLocationForm()) return;
+
+        try {
+            setLoading(true);
+            if (
+                selectedFloor !== (patientDetail.current_floor || patientDetail.floor) ||
+                selectedWard !== (patientDetail.current_ward || patientDetail.ward) ||
+                selectedBed !== (patientDetail.current_bed || patientDetail.bed)
+            ) {
+                // Find the bed ID based on selected values
+                let newBedId = null;
+                for (const floor of hospitalStructure) {
+                    if (floor.floor_number == selectedFloor) {
+                        for (const ward of floor.wards) {
+                            if (ward.ward_number == selectedWard) {
+                                for (const bed of ward.beds) {
+                                    if (bed.bed_number == selectedBed) {
+                                        newBedId = bed.id;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (newBedId) {
+                    await patientApiService.assignPatientToBed(patientDetail.id, newBedId);
+                    // Fetch updated patient details after bed assignment
+                    const updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
+                    setPatientDetail(updatedPatient);
+                }
+            }
+            handleCloseUpdateLocationModal();
+        } catch (error) {
+            console.error('Error updating location:', error);
+            alert('Failed to update location. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- Admission Modal Handlers ---
+    const handleOpenUpdateAdmissionModal = () => {
+        setShowUpdateAdmissionModal(true);
+    };
+
+    const handleCloseUpdateAdmissionModal = () => {
+        setShowUpdateAdmissionModal(false);
+        setAdmissionErrors({});
+    };
+
+    const handleAdmissionInputChange = (e) => {
+        const { name, value } = e.target;
+        setAdmissionData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    const validateAdmissionForm = () => {
+        const newErrors = {};
+        if (!admissionData.admitted_at) newErrors.admitted_at = 'Admission date is required';
+        if (admissionData.discharged_at && new Date(admissionData.discharged_at) < new Date(admissionData.admitted_at)) {
+            newErrors.discharged_at = 'Discharge date cannot be before admission date';
+        }
+        setAdmissionErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handleUpdateAdmissionSubmit = async () => {
+        if (!validateAdmissionForm()) return;
+
+        try {
+            setLoading(true);
+            // Only update admission date if it's different
+            let updatedPatient = patientDetail;
+            if (admissionData.admitted_at !== patientDetail.admitted_at) {
+                // Note: This requires an API endpoint that allows updating admission date
+                // For now, we'll just update discharge date if needed
+                if (admissionData.discharged_at !== patientDetail.discharged_at) {
+                    // If discharge date is being updated, call the discharge API
+                    if (admissionData.discharged_at) {
+                        updatedPatient = await patientApiService.dischargePatient(patientDetail.id, { discharged_at: admissionData.discharged_at });
+                    } else {
+                        // If trying to clear discharge date, you might need a specific API call
+                        // For now, we'll just fetch the latest details
+                        updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
+                    }
+                }
+            } else if (admissionData.discharged_at !== patientDetail.discharged_at) {
+                // If admission date is same, check discharge date update
+                if (admissionData.discharged_at) {
+                    updatedPatient = await patientApiService.dischargePatient(patientDetail.id, { discharged_at: admissionData.discharged_at });
+                } else {
+                    // If trying to clear discharge date, you might need a specific API call
+                    // For now, we'll just fetch the latest details
+                    updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
+                }
+            }
+            setPatientDetail(updatedPatient);
+            handleCloseUpdateAdmissionModal();
+        } catch (error) {
+            console.error('Error updating admission info:', error);
+            alert('Failed to update admission information. Please try again.');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
-        <div className="p-6 bg-gray-50 min-h-screen">
-            {/* Header */}
+        <div className="p-8 bg-gray-50 min-h-screen">
             <div className="mb-6">
                 <button
                     onClick={onBack}
-                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 mb-4"
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
-                    Back to Dashboard
+                    Back to Patient List
                 </button>
-                <h1 className="text-3xl font-bold text-gray-800">Device Information</h1>
             </div>
 
-            {/* Error Message */}
-            {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-                    {error}
+            <Card className="p-6">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">{patientDetail.name}</h2>
+                        <div className="flex items-center gap-4">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                ID: {patientDetail.id}
+                            </span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${patientDetail.discharged_at
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                                }`}>
+                                {patientDetail.discharged_at ? 'Discharged' : 'Active'}
+                            </span>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        {!patientDetail.discharged_at && (
+                            <button
+                                onClick={() => setShowDischargeConfirm(true)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+                            >
+                                Discharge Patient
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {/* Personal Information Card */}
+                    <div className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-medium text-gray-600">Personal Information</h3>
+                            <button
+                                onClick={handleOpenUpdatePersonalModal}
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                Update
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            <div>
+                                <span className="text-sm text-gray-500">Name:</span>
+                                <p className="font-medium">{patientDetail.name}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Age:</span>
+                                <p className="font-medium">{patientDetail.age}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Gender:</span>
+                                <p className="font-medium">{getGenderDisplay(patientDetail.gender)}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Contact:</span>
+                                <p className="font-medium">{patientDetail.contact}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Location Information Card */}
+                    <div className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-medium text-gray-600">Location Information</h3>
+                            <button
+                                onClick={handleOpenUpdateLocationModal}
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                Update
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            <div>
+                                <span className="text-sm text-gray-500">Floor:</span>
+                                <p className="font-medium">{patientDetail.current_floor || patientDetail.floor || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Ward:</span>
+                                <p className="font-medium">{patientDetail.current_ward || patientDetail.ward || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Bed:</span>
+                                <p className="font-medium">{patientDetail.current_bed || patientDetail.bed || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Admission Details Card */}
+                    <div className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-medium text-gray-600">Admission Details</h3>
+                            <button
+                                onClick={handleOpenUpdateAdmissionModal}
+                                className="text-sm text-blue-600 hover:text-blue-800"
+                            >
+                                Update
+                            </button>
+                        </div>
+                        <div className="space-y-2">
+                            <div>
+                                <span className="text-sm text-gray-500">Admitted At:</span>
+                                <p className="font-medium">{formatDate(patientDetail.admitted_at)}</p>
+                            </div>
+                            <div>
+                                <span className="text-sm text-gray-500">Discharged At:</span>
+                                <p className="font-medium">{patientDetail.discharged_at ? formatDate(patientDetail.discharged_at) : 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Patient Bed Assignment History */}
+                <div className="mt-6 border border-gray-200 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-600 mb-3">Patient Bed Assignment History</h3>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned By</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {patientDetail.patient_bed_assignments?.map((entry) => (
+                                    <tr key={entry.id}>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{entry.bed.bed_number}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.user.name}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.start_time)}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                            {entry.end_time ? formatDate(entry.end_time) : <span className="text-green-600 font-medium">Currently Assigned</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Device Bed Assignment History */}
+                <div className="mt-6 border border-gray-200 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-600 mb-3">Device Bed Assignment History</h3>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned By</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
+                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {patientDetail.device_bed_assignments?.map((entry) => (
+                                    <tr key={entry.id}>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{entry.device.mac_address}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.user.name}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.bed.bed_number}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.start_time)}</td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                            {entry.end_time ? formatDate(entry.end_time) : <span className="text-green-600 font-medium">Currently Assigned</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </Card>
+
+            {/* Discharge Confirmation Modal */}
+            {showDischargeConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Confirm Discharge</h3>
+
+                        <div className="mb-4">
+                            <p className="text-gray-600">
+                                Are you sure you want to discharge <strong>{patientDetail.name}</strong>?
+                                This action cannot be undone.
+                            </p>
+                        </div>
+
+                        <div className="flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowDischargeConfirm(false)}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleDischarge}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                                Confirm Discharge
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* Patient Info Card */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Patient Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Name</h3>
-                        <p className="text-lg font-semibold">{patientInfo.name}</p>
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Age</h3>
-                        <p className="text-lg font-semibold">{patientInfo.age}</p>
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Gender</h3>
-                        <p className="text-lg font-semibold">{patientInfo.gender}</p>
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Admission Date</h3>
-                        <p className="text-lg font-semibold">{patientInfo.admissionDate}</p>
-                    </div>
-                </div>
-            </div>
+            {/* Update Personal Info Modal */}
+            {showUpdatePersonalModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justifycenter z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Update Personal Information</h3>
 
-            {/* Device Info Card */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Device Information</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Device ID</h3>
-                        <p className="text-lg font-semibold">{device.id || device.deviceId}</p> {/* Prefer 'id' if available */}
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Current Level</h3>
-                        <p className="text-lg font-semibold">{device.level}%</p>
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Ward</h3>
-                        <p className="text-lg font-semibold">{device.wardNo}</p>
-                    </div>
-                    <div className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-600">Room</h3>
-                        <p className="text-lg font-semibold">{device.roomNo}</p>
-                    </div>
-                </div>
-            </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    value={personalData.name}
+                                    onChange={handlePersonalInputChange}
+                                    className={`w-full px-3 py-2 border rounded-lg ${personalErrors.name ? 'border-red-500' : 'border-gray-300'}`}
+                                />
+                                {personalErrors.name && <p className="text-red-500 text-sm mt-1">{personalErrors.name}</p>}
+                            </div>
 
-            {/* Fluid Level Chart */}
-            <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 mb-4">Fluid Level History</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={fluidLevelHistory}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="time" />
-                        <YAxis domain={[0, 100]} />
-                        <Tooltip
-                            formatter={(value) => [`${value}%`, 'Level']}
-                            labelFormatter={(label) => `Time: ${label}`}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="level"
-                            stroke="#3B82F6"
-                            strokeWidth={2}
-                            name="Level (%)"
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 6 }}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
-            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                                <input
+                                    type="number"
+                                    name="age"
+                                    value={personalData.age}
+                                    onChange={handlePersonalInputChange}
+                                    min="1"
+                                    className={`w-full px-3 py-2 border rounded-lg ${personalErrors.age ? 'border-red-500' : 'border-gray-300'}`}
+                                />
+                                {personalErrors.age && <p className="text-red-500 text-sm mt-1">{personalErrors.age}</p>}
+                            </div>
 
-            {/* Advanced Info Toggle */}
-            <div className="mb-6">
-                <button
-                    onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
-                >
-                    <svg
-                        className={`w-5 h-5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                    >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7-7-7-7" />
-                    </svg>
-                    {showAdvanced ? 'Hide Advanced Information' : 'Show Advanced Information'}
-                </button>
-            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                                <select
+                                    name="gender"
+                                    value={personalData.gender}
+                                    onChange={handlePersonalInputChange}
+                                    className={`w-full px-3 py-2 border rounded-lg ${personalErrors.gender ? 'border-red-500' : 'border-gray-300'}`}
+                                >
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </select>
+                                {personalErrors.gender && <p className="text-red-500 text-sm mt-1">{personalErrors.gender}</p>}
+                            </div>
 
-            {/* Advanced Information - Hidden by default */}
-            {showAdvanced && (
-                <>
-                    {/* Loading indicator */}
-                    {loadingHistory && (
-                        <div className="bg-white rounded-xl shadow-md p-6 mb-6 text-center">
-                            <p className="text-gray-600">Loading history...</p>
-                        </div>
-                    )}
-
-                    {/* Patient Bed Assignment History */}
-                    {device.patient_id && ( // Only show if patient_id exists
-                        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-                            <h2 className="text-xl font-semibold text-gray-800 mb-4">Patient Bed Assignment History</h2>
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned By</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {patientBedHistory.map((entry) => (
-                                            <tr key={entry.id}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.patient.name}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getUserDisplayName(entry.user)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getBedDisplayName(entry.bed)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.start_time)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                    {entry.end_time ? formatDate(entry.end_time) : <span className="text-green-600 font-medium">Currently Assigned</span>}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                                <input
+                                    type="text"
+                                    name="contact"
+                                    value={personalData.contact}
+                                    onChange={handlePersonalInputChange}
+                                    className={`w-full px-3 py-2 border rounded-lg ${personalErrors.contact ? 'border-red-500' : 'border-gray-300'}`}
+                                />
+                                {personalErrors.contact && <p className="text-red-500 text-sm mt-1">{personalErrors.contact}</p>}
                             </div>
                         </div>
-                    )}
 
-                    {/* Device Bed Assignment History */}
-                    <div className="bg-white rounded-xl shadow-md p-6">
-                        <h2 className="text-xl font-semibold text-gray-800 mb-4">Device Bed Assignment History</h2>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned By</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Time</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">End Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {deviceBedHistory.map((entry) => (
-                                        <tr key={entry.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{entry.device.name || entry.device.mac_address}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getUserDisplayName(entry.user)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{getBedDisplayName(entry.bed)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(entry.start_time)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                {entry.end_time ? formatDate(entry.end_time) : <span className="text-green-600 font-medium">Currently Assigned</span>}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={handleCloseUpdatePersonalModal}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdatePersonalSubmit}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                disabled={loading}
+                            >
+                                {loading ? 'Updating...' : 'Update Personal Info'}
+                            </button>
                         </div>
                     </div>
-                </>
+                </div>
+            )}
+
+            {/* Update Location Modal */}
+            {showUpdateLocationModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Update Location Information</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Current Floor: {patientDetail.current_floor || patientDetail.floor || 'N/A'}</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Current Ward: {patientDetail.current_ward || patientDetail.ward || 'N/A'}</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Current Bed: {patientDetail.current_bed || patientDetail.bed || 'N/A'}</label>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">New Floor</label>
+                                <select
+                                    name="floor"
+                                    value={selectedFloor}
+                                    onChange={handleLocationChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    disabled={loadingStructure}
+                                >
+                                    <option value="">Select Floor</option>
+                                    {hospitalStructure.map(floor => (
+                                        <option key={floor.id} value={floor.floor_number}>
+                                            Floor {floor.floor_number}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">New Ward</label>
+                                <select
+                                    name="ward"
+                                    value={selectedWard}
+                                    onChange={handleLocationChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    disabled={!selectedFloor || loadingStructure}
+                                >
+                                    <option value="">Select Ward</option>
+                                    {hospitalStructure
+                                        .filter(f => f.floor_number == selectedFloor)
+                                        .flatMap(f => f.wards)
+                                        .map(ward => (
+                                            <option key={ward.id} value={ward.ward_number}>
+                                                Ward {ward.ward_number}
+                                            </option>
+                                        ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">New Bed</label>
+                                <select
+                                    name="bed"
+                                    value={selectedBed}
+                                    onChange={handleLocationChange}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                    disabled={!selectedWard || loadingStructure}
+                                >
+                                    <option value="">Select Bed</option>
+                                    {availableBeds
+                                        .filter(b => b.bed_number !== (patientDetail.current_bed || patientDetail.bed)) // Exclude current bed if not in same selection
+                                        .map(bed => (
+                                            <option key={bed.id} value={bed.bed_number}>
+                                                Bed {bed.bed_number}
+                                            </option>
+                                        ))}
+                                </select>
+                                {locationErrors.location && <p className="text-red-500 text-sm mt-1">{locationErrors.location}</p>}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={handleCloseUpdateLocationModal}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateLocationSubmit}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                disabled={loading}
+                            >
+                                {loading ? 'Updating...' : 'Update Location'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Update Admission Info Modal */}
+            {showUpdateAdmissionModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justifycenter z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Update Admission Information</h3>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Admitted At</label>
+                                <input
+                                    type="datetime-local"
+                                    name="admitted_at"
+                                    value={admissionData.admitted_at ? new Date(admissionData.admitted_at).toISOString().slice(0, 16) : ''}
+                                    onChange={handleAdmissionInputChange}
+                                    className={`w-full px-3 py-2 border rounded-lg ${admissionErrors.admitted_at ? 'border-red-500' : 'border-gray-300'}`}
+                                />
+                                {admissionErrors.admitted_at && <p className="text-red-500 text-sm mt-1">{admissionErrors.admitted_at}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Discharged At</label>
+                                <input
+                                    type="datetime-local"
+                                    name="discharged_at"
+                                    value={admissionData.discharged_at ? new Date(admissionData.discharged_at).toISOString().slice(0, 16) : ''}
+                                    onChange={handleAdmissionInputChange}
+                                    className={`w-full px-3 py-2 border rounded-lg ${admissionErrors.discharged_at ? 'border-red-500' : 'border-gray-300'}`}
+                                />
+                                {admissionErrors.discharged_at && <p className="text-red-500 text-sm mt-1">{admissionErrors.discharged_at}</p>}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button
+                                onClick={handleCloseUpdateAdmissionModal}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                disabled={loading}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateAdmissionSubmit}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                disabled={loading}
+                            >
+                                {loading ? 'Updating...' : 'Update Admission Info'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
 };
 
-export default DeviceInfoPage;
+export default PatientInfo;

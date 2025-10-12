@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { patientApiService } from '../api/patientApi'; // Import the API service
 
-const BedTile = ({ bed, onClick }) => {
+const BedTile = ({ bed, onClick, onPatientInfoRequested }) => { // Add onPatientInfoRequested prop
     // Calculate occupancy status based on is_occupied field
     const current = bed.is_occupied ? 1 : 0;
     const capacity = 1; // Since each bed can only be occupied or not
@@ -27,32 +28,155 @@ const BedTile = ({ bed, onClick }) => {
         }
     };
 
+    const [showPatientInfoModal, setShowPatientInfoModal] = useState(false);
+    const [patientInfo, setPatientInfo] = useState(null);
+    const [loadingPatient, setLoadingPatient] = useState(false);
+    const [error, setError] = useState('');
+
     const status = getBedStatus(current, capacity);
     const isFull = current >= capacity;
 
+    const handleTileClick = async () => {
+        // If a generic onClick was passed (e.g., for selection), call it
+        if (onClick) {
+            onClick(bed);
+        }
+
+        // If the bed is occupied, fetch patient details
+        if (bed.is_occupied) {
+            setLoadingPatient(true);
+            setError('');
+            try {
+                // Find the patient assigned to this bed using the assignment history
+                // This assumes you have an API endpoint to get patient details by bed ID or current assignment
+                // You might need to adjust this based on your exact API capabilities.
+                // For example, if you have an endpoint like /api/patients/?current_bed_id=<bed_id>
+                // Or if you get the assignment history and then fetch the patient from there.
+                // A common approach is to get the active assignment for the bed.
+                const patientAssignments = await patientApiService.getPatientBedHistoryByBedId(bed.id); // You might need to add this API function
+                const activeAssignment = patientAssignments.find(assignment => assignment.end_time === null); // Find current assignment
+
+                if (activeAssignment) {
+                    const patientId = activeAssignment.patient.id; // Adjust based on your API response structure
+                    const patientDetail = await patientApiService.getPatientDetail(patientId);
+                    setPatientInfo(patientDetail);
+                    setShowPatientInfoModal(true);
+                } else {
+                    // If no active assignment found despite is_occupied being true, handle error
+                    setError('Patient assignment data not found for this occupied bed.');
+                }
+            } catch (err) {
+                console.error('Error fetching patient info for bed:', bed.id, err);
+                setError('Failed to load patient information for this bed.');
+            } finally {
+                setLoadingPatient(false);
+            }
+        }
+    };
+
+    // Alternative: If you have an endpoint that directly links bed to patient details
+    // const handleTileClick = async () => {
+    //     if (onClick) {
+    //         onClick(bed);
+    //     }
+    //
+    //     if (bed.is_occupied) {
+    //         setLoadingPatient(true);
+    //         setError('');
+    //         try {
+    //             // Example API call: /api/hospital/beds/<bed_id>/current-patient/
+    //             const patientDetail = await hospitalApiService.getCurrentPatientForBed(bed.id);
+    //             setPatientInfo(patientDetail);
+    //             setShowPatientInfoModal(true);
+    //         } catch (err) {
+    //             console.error('Error fetching patient info for bed:', bed.id, err);
+    //             setError('Failed to load patient information for this bed.');
+    //         } finally {
+    //             setLoadingPatient(false);
+    //         }
+    //     }
+    // };
+
     return (
-        <div
-            onClick={() => onClick(bed)}
-            className={`
-                relative cursor-pointer transition-all hover:shadow-md
-                ${getBedColor(status)}
-                ${bed.shape === 'circular' ? 'w-24 h-24 flex items-center justify-center rounded-full mx-auto' : 'w-24 h-24 flex items-center justify-center rounded-lg'}
-            `}
-        >
-            <div className="text-center">
-                <div className="font-semibold text-sm mb-1">
-                    {bed.bed_number}
-                </div>
-                <div className="text-xs font-medium">
-                    {current}/{capacity}
-                </div>
-                {isFull && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                        !
+        <>
+            <div
+                onClick={handleTileClick}
+                className={`
+                    relative cursor-pointer transition-all hover:shadow-md
+                    ${getBedColor(status)}
+                    ${bed.shape === 'circular' ? 'w-24 h-24 flex items-center justify-center rounded-full mx-auto' : 'w-24 h-24 flex items-center justify-center rounded-lg'}
+                `}
+            >
+                <div className="text-center">
+                    <div className="font-semibold text-sm mb-1">
+                        {bed.bed_number}
                     </div>
-                )}
+                    <div className="text-xs font-medium">
+                        {current}/{capacity}
+                    </div>
+                    {isFull && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                            !
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+
+            {/* Patient Info Modal */}
+            {showPatientInfoModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Patient Information</h3>
+
+                        {loadingPatient && <p>Loading patient details...</p>}
+                        {error && <p className="text-red-500">{error}</p>}
+
+                        {!loadingPatient && !error && patientInfo && (
+                            <div className="space-y-4">
+                                <div className="border-b pb-2">
+                                    <h4 className="font-medium text-gray-600">Personal Information</h4>
+                                    <div className="space-y-1 mt-1">
+                                        <p><span className="font-medium">Name:</span> {patientInfo.name}</p>
+                                        <p><span className="font-medium">Age:</span> {patientInfo.age}</p>
+                                        <p><span className="font-medium">Gender:</span> {patientInfo.gender}</p>
+                                        <p><span className="font-medium">Contact:</span> {patientInfo.contact}</p>
+                                    </div>
+                                </div>
+
+                                <div className="border-b pb-2">
+                                    <h4 className="font-medium text-gray-600">Location Information</h4>
+                                    <div className="space-y-1 mt-1">
+                                        <p><span className="font-medium">Floor:</span> {patientInfo.current_floor || patientInfo.floor || 'N/A'}</p>
+                                        <p><span className="font-medium">Ward:</span> {patientInfo.current_ward || patientInfo.ward || 'N/A'}</p>
+                                        <p><span className="font-medium">Bed:</span> {patientInfo.current_bed || patientInfo.bed || 'N/A'}</p>
+                                    </div>
+                                </div>
+
+                                <div className="border-b pb-2">
+                                    <h4 className="font-medium text-gray-600">Admission Details</h4>
+                                    <div className="space-y-1 mt-1">
+                                        <p><span className="font-medium">Admitted At:</span> {new Date(patientInfo.admitted_at).toLocaleString()}</p>
+                                        <p><span className="font-medium">Discharged At:</span> {patientInfo.discharged_at ? new Date(patientInfo.discharged_at).toLocaleString() : 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowPatientInfoModal(false);
+                                    setPatientInfo(null); // Clear data when closing
+                                }}
+                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 

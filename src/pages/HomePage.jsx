@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// src/pages/HomePage.jsx
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DeviceCard from '../components/DeviceCard';
 import DeviceInfoPage from './DeviceInfoPage';
-import {
-    getAllDevices,
-    sensorWebSocket,
-    transformDeviceData,
-    processSensorData,
-    calculateDeviceStatus
-} from '../api/api';
+import { getAllDevices } from '../api/deviceApi';
+import { sensorWebSocket } from '../api/websocket';
+import { transformDeviceData, processSensorData, calculateDeviceStatus } from '../api/helperFunctions';
+
+// --- ADD API FUNCTION FOR DISCONNECT ---
+import apiClient from '../api/api'; // Import the main apiClient instance
 
 const HomePage = ({ onShowNotifications, onShowDetails }) => {
     const [devices, setDevices] = useState([]);
@@ -16,12 +16,16 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
     const [error, setError] = useState(null);
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
 
+    // Ref to track if connect has been attempted in this component's lifecycle
+    const connectAttemptedRef = useRef(false);
+
     // Fetch initial devices data
     const fetchDevices = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
             const data = await getAllDevices();
+            // Transform backend data using helper function
             const transformedDevices = data.map(transformDeviceData);
             setDevices(transformedDevices);
         } catch (err) {
@@ -34,6 +38,7 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
 
     // Handle WebSocket connection status
     const handleConnectionStatus = useCallback((data) => {
+        console.log("Received connection status from WebSocket:", data);
         setConnectionStatus(data.status);
 
         if (data.status === 'failed') {
@@ -45,29 +50,34 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
 
     // Handle incoming sensor data from WebSocket
     const handleSensorData = useCallback((data) => {
-        console.log('Received sensor data:', data);
+        console.log('🔵 Received sensor data from WebSocket:', data);
 
-        const processedData = processSensorData(data);
+        // Process the raw sensor data using helper function
+        // This extracts all fields including status (if present in the message)
+        const processedData = processSensorData(data.message); // Assuming data.message contains the payload
+
+        console.log('🟢 Processed sensor data:', processedData);
 
         setDevices(prevDevices =>
             prevDevices.map(device => {
-                // Match device by node_id or mac_address
-                if (device.id === processedData.nodeId ||
-                    device.deviceId === processedData.nodeMac) {
+                // Match device by nodeId (from WebSocket message)
+                if (device.id === processedData.nodeId) {
+                    console.log(`✅ Updating device ${device.id} with status: ${processedData.status}, level: ${processedData.reading}`);
 
                     const updatedDevice = {
                         ...device,
                         level: Math.round(processedData.reading),
                         lastReading: processedData.timestamp,
-                        status: 'Activate', // Device is active if sending data
+                        // ✅ Update status from WebSocket message if present
+                        status: processedData.status || device.status, // Use new status or keep old one if not provided
                         batteryPercent: processedData.batteryPercent
                     };
 
                     // Calculate alert status based on thresholds
-                    if (device.fluidBag) {
+                    if (updatedDevice.fluidBag) {
                         const alertStatus = calculateDeviceStatus(
-                            processedData.reading,
-                            device.fluidBag
+                            updatedDevice.level,
+                            updatedDevice.fluidBag
                         );
                         updatedDevice.alertStatus = alertStatus;
                     }
@@ -81,20 +91,31 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
 
     // Initialize WebSocket and fetch devices
     useEffect(() => {
+        console.log("HomePage useEffect running");
+
         // Fetch initial devices
         fetchDevices();
 
-        // Setup WebSocket
+        // Setup WebSocket listeners
         sensorWebSocket.on('connection', handleConnectionStatus);
         sensorWebSocket.on('sensor_data', handleSensorData);
 
-        // Connect to WebSocket
-        sensorWebSocket.connect();
+        // Use a ref to ensure connect is only attempted once per component mount
+        if (!connectAttemptedRef.current) {
+            console.log("Connecting WebSocket from HomePage useEffect");
+            sensorWebSocket.connect();
+            connectAttemptedRef.current = true;
+        } else {
+            console.log("WebSocket connect already attempted for this mount, skipping.");
+        }
 
         // Cleanup
         return () => {
+            console.log("HomePage useEffect cleanup running");
             sensorWebSocket.off('connection', handleConnectionStatus);
             sensorWebSocket.off('sensor_data', handleSensorData);
+            sensorWebSocket.disconnect();
+            connectAttemptedRef.current = false;
         };
     }, [fetchDevices, handleConnectionStatus, handleSensorData]);
 
@@ -105,14 +126,23 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
         }
     };
 
-    const handleDisconnect = (device) => {
-        // Update device status to offline
-        setDevices(prevDevices =>
-            prevDevices.map(d =>
-                d.id === device.id ? { ...d, status: 'Offline' } : d
-            )
-        );
-    };
+    // --- UPDATE handleDisconnect TO PERFORM API CALL ---
+    const handleDisconnect = useCallback(async (device) => {
+        try {
+            // Example API call - adjust the endpoint and method as needed for your backend
+            // This assumes there's an endpoint like /api/devices/{id}/disconnect/
+            const response = await apiClient.post(`/sensor/devices/${device.id}/disconnect/`);
+
+            // Return the response object so the DeviceCard can check the status
+            return response; // e.g., { status: 200, data: ... }
+
+        } catch (err) {
+            console.error("API call to disconnect device failed:", err);
+            // Throw the error so the DeviceCard's catch block can handle it
+            throw err;
+        }
+    }, []); // Empty dependency array if apiClient and endpoint are static
+    // If the endpoint needs device-specific details from the HomePage's scope, add them to the dependency array.
 
     const handleBackToHome = () => {
         setSelectedDevice(null);
@@ -134,12 +164,12 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
                     <h2 className="text-3xl font-bold text-gray-800">Active Devices</h2>
                     <div className="flex items-center gap-3 mt-2">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${connectionStatus === 'connected'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
                             }`}>
                             <span className={`w-2 h-2 rounded-full mr-2 ${connectionStatus === 'connected'
-                                    ? 'bg-green-500'
-                                    : 'bg-red-500'
+                                ? 'bg-green-500'
+                                : 'bg-red-500'
                                 }`}></span>
                             {connectionStatus === 'connected' ? 'Connected' : 'Disconnected'}
                         </span>
@@ -157,7 +187,7 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
                     >
                         {loading ? 'Refreshing...' : 'Refresh'}
                     </button>
-                    <button className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                    <button className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors shadow-sm">
                         Add Devices
                     </button>
                 </div>
@@ -199,6 +229,7 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
                             key={device.id}
                             device={device}
                             onShowDetails={handleShowDetails}
+                            // Pass the updated handleDisconnect function
                             onDisconnect={handleDisconnect}
                         />
                     ))}

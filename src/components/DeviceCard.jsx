@@ -1,10 +1,36 @@
-import React from 'react';
+// src/components/DeviceCard.js
+import React, { useState, useEffect } from 'react';
 import Card from './Card';
+import { isDeviceOffline, isDeviceTaskCompleted, calculateDeviceStatus } from '../api/helperFunctions';
 
 const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
-    // Safely check offline status
-    const isOffline = device?.status?.toLowerCase() === 'offline' ||
-        device?.status?.toLowerCase() === 'deactivate';
+    // Use helper function to check offline status (includes task completed)
+    const isOffline = isDeviceOffline(device?.status);
+    // Use helper function to check task completion specifically
+    const isTaskCompleted = isDeviceTaskCompleted(device?.status);
+
+    // State for confirmation modal and timer
+    const [showConfirm, setShowConfirm] = useState(false);
+    const [timer, setTimer] = useState(10); // 10 seconds timer
+    const [error, setError] = useState('');
+
+    // Timer effect
+    useEffect(() => {
+        let interval = null;
+        if (showConfirm && timer > 0) {
+            interval = setInterval(() => {
+                setTimer(t => t - 1);
+            }, 1000);
+        } else if (timer === 0) {
+            // Timer expired, close confirmation
+            setShowConfirm(false);
+            setTimer(10); // Reset timer for next time
+            setError(''); // Clear any previous error
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [showConfirm, timer]);
 
     // Get fluid bag type display name
     const getFluidBagTypeName = (type) => {
@@ -18,14 +44,15 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
 
     // Calculate alert status based on thresholds
     const getAlertStatus = () => {
-        if (isOffline) return 'offline';
+        // Consider task completed as offline for alert purposes
+        if (isOffline || isTaskCompleted) return 'offline';
         if (!device.fluidBag) return 'unknown';
 
         const { thresholdLow, thresholdHigh } = device.fluidBag;
         const level = device.level || 0;
 
         if (level <= thresholdLow) return 'critical';
-        if (level <= thresholdLow * 1.2) return 'warning';
+        if (level <= thresholdLow * 1.2) return 'warning'; // Example: warning slightly above low
         if (level >= thresholdHigh) return 'overfill';
         return 'normal';
     };
@@ -78,7 +105,7 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
 
     const getStatusBadge = (status) => {
         const badges = {
-            'offline': { bg: 'bg-gray-500', text: 'Offline' },
+            'offline': { bg: 'bg-gray-500', text: isTaskCompleted ? 'Task Completed' : 'Offline' }, // Different text for task completed
             'critical': { bg: 'bg-red-500', text: 'Critical Low' },
             'warning': { bg: 'bg-yellow-500', text: 'Low' },
             'overfill': { bg: 'bg-purple-500', text: 'Overfill' },
@@ -88,7 +115,8 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
     };
 
     const getDisconnectButtonClass = () => {
-        if (isOffline) return 'bg-gray-400 hover:bg-gray-500 text-white cursor-not-allowed';
+        // Disable disconnect button for offline OR task-completed devices
+        if (isOffline || isTaskCompleted) return 'bg-gray-400 hover:bg-gray-500 text-white cursor-not-allowed';
         return 'bg-red-500 hover:bg-red-600 text-white';
     };
 
@@ -104,11 +132,49 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
         }
     };
 
-    const handleDisconnect = (e) => {
+    const handleDisconnectClick = (e) => {
         e.stopPropagation();
-        if (onDisconnect && !isOffline) {
-            onDisconnect(device);
+        // Call onDisconnect only if the device is neither offline nor task-completed
+        if (onDisconnect && !(isOffline || isTaskCompleted)) {
+            setShowConfirm(true); // Show confirmation modal
+            setError(''); // Clear any previous error
+            setTimer(10); // Reset timer to 10 seconds
         }
+    };
+
+    const handleConfirmYes = async () => {
+        try {
+            // Call the onDisconnect function passed from parent (likely HomePage)
+            // This function should handle the API call
+            const result = await onDisconnect(device);
+
+            // Assuming onDisconnect returns a promise that resolves with the API response
+            // or throws an error on failure.
+            // Check the result or catch errors appropriately.
+            if (result && result.status === 200) {
+                // Success: Close modal, reset timer, clear error
+                setShowConfirm(false);
+                setTimer(10);
+                setError('');
+                // Optionally, you might want to update the device status locally here
+                // e.g., setDevices(prev => prev.map(d => d.id === device.id ? {...d, status: 'Offline'} : d))
+                // But this is usually handled by the parent component after the API call succeeds.
+            } else {
+                // If result exists but status is not 200
+                setError('API call failed. Status: ' + (result?.status || 'Unknown'));
+            }
+        } catch (err) {
+            // API call failed
+            console.error("Disconnect API call failed:", err);
+            setError(err.message || 'An error occurred while disconnecting the device.');
+        }
+    };
+
+    const handleConfirmNo = () => {
+        // Close modal, reset timer, clear error
+        setShowConfirm(false);
+        setTimer(10);
+        setError('');
     };
 
     const fluidBagType = device?.fluidBag?.type
@@ -118,7 +184,7 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
     const statusBadge = getStatusBadge(alertStatus);
 
     return (
-        <Card className={`p-6 hover:shadow-lg transition-shadow border-2 ${getBorderColor(alertStatus)} ${getBgColor(alertStatus)} ${isOffline ? 'opacity-70' : ''}`}>
+        <Card className={`p-6 hover:shadow-lg transition-shadow border-2 ${getBorderColor(alertStatus)} ${getBgColor(alertStatus)} ${(isOffline || isTaskCompleted) ? 'opacity-70' : ''}`}> {/* Apply opacity for both offline and task completed */}
             {/* Header with Fluid Bag Type and Status Badge */}
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-bold text-gray-800">{fluidBagType}</h3>
@@ -209,7 +275,8 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
             </div>
 
             {/* Threshold Information (if available) */}
-            {device?.fluidBag && !isOffline && (
+            {/* Hide threshold info if device is offline or task completed */}
+            {device?.fluidBag && !(isOffline || isTaskCompleted) && (
                 <div className="mb-3 p-2 bg-white bg-opacity-50 rounded text-xs text-gray-600">
                     <div className="flex justify-between">
                         <span>Low: {device.fluidBag.thresholdLow}%</span>
@@ -222,11 +289,12 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
             {/* Action Buttons */}
             <div className="flex justify-end gap-2">
                 <button
-                    onClick={handleDisconnect}
-                    disabled={isOffline}
+                    onClick={handleDisconnectClick} // Changed handler
+                    disabled={isOffline || isTaskCompleted} // Disable for offline OR task-completed
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${getDisconnectButtonClass()}`}
                 >
-                    {isOffline ? 'Offline' : 'Disconnect'}
+                    {/* Change button text based on status */}
+                    {isOffline || isTaskCompleted ? 'Inactive' : 'Disconnect'}
                 </button>
                 <button
                     onClick={handleMoreInfo}
@@ -235,6 +303,40 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
                     More Info
                 </button>
             </div>
+
+            {/* Confirmation Modal Overlay */}
+            {showConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                        <h3 className="text-lg font-bold text-gray-800 mb-2">Confirm Disconnection</h3>
+                        <p className="text-gray-600 mb-4">
+                            Are you sure you want to disconnect device <strong>{device?.deviceId || 'N/A'}</strong>?
+                        </p>
+                        {error && (
+                            <div className="mb-3 p-2 bg-red-100 text-red-700 rounded text-sm">
+                                Error: {error}
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-500">Auto-closing in {timer}s</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleConfirmNo}
+                                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-400 transition-colors"
+                                >
+                                    No
+                                </button>
+                                <button
+                                    onClick={handleConfirmYes}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+                                >
+                                    Yes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 };
