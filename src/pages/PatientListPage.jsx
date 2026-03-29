@@ -16,16 +16,12 @@ const PatientListPage = () => {
     const [filterWard, setFilterWard] = useState('');
     const [filterGender, setFilterGender] = useState('');
     // --- Add back floor, ward, bed to newPatient state ---
+
     const [newPatient, setNewPatient] = useState({
         name: '',
         age: '',
         gender: 'male',
         contact: '',
-        floor: '', // These will now be IDs
-        ward: '',  // These will now be IDs
-        bed: '',   // These will now be IDs
-        // Keep admitted_at in state to allow user input if needed, or remove it if always current time
-        // For this example, we'll keep it so the user can see the default value set in handleAddPatient
     });
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [showPatientInfo, setShowPatientInfo] = useState(false);
@@ -76,54 +72,42 @@ const PatientListPage = () => {
     };
 
     const handleAddPatient = async () => {
-        // Check for required fields including floor, ward, bed
-        if (newPatient.name && newPatient.age && newPatient.contact && newPatient.floor && newPatient.ward && newPatient.bed) {
+        if (newPatient.name && newPatient.age && newPatient.contact) {
             try {
-                // 1. Prepare patient data for creation (excluding floor, ward, bed)
                 const patientData = {
                     name: newPatient.name,
                     age: parseInt(newPatient.age),
-                    gender: newPatient.gender,
+                    gender: 'male', // default gender
                     contact: parseInt(newPatient.contact),
-                    // Automatically set admitted_at to current time
                     admitted_at: new Date().toISOString(),
-                    // Do not include floor, ward, bed in this object
                 };
 
-                // 2. Create the patient
                 const newPatientData = await patientApiService.createPatient(patientData);
 
-                // 3. Assign the patient to the selected bed using the assignPatientToBed API
-                // The newPatient.bed value should be the Bed ID from the dropdown
-                await patientApiService.assignPatientToBed(newPatientData.id, parseInt(newPatient.bed));
+                // Add the new patient directly to the list
+                setPatients([...patients, newPatientData]);
 
-                // 4. Fetch the updated patient details to reflect the location
-                const updatedPatientDetail = await patientApiService.getPatientDetail(newPatientData.id);
-
-                // 5. Update the local state
-                setPatients([...patients, updatedPatientDetail]);
+                // Reset the form
                 setNewPatient({
                     name: '',
                     age: '',
                     gender: 'male',
                     contact: '',
-                    floor: '', // Reset the new fields too
-                    ward: '',
-                    bed: ''
                 });
+
+                // Close modal
                 setShowAddModal(false);
+
+                alert('✅ Patient added successfully!');
             } catch (err) {
-                console.error('Error adding patient or assigning bed:', err);
-                // Provide more specific error feedback if needed
-                if (err.response && err.response.status === 400) {
-                    // Handle specific backend validation errors (e.g., bed occupied)
-                    alert(`Failed to add patient: ${err.response.data.error || 'Bad Request'}`);
-                } else {
-                    alert('Failed to add patient or assign bed. Please try again.');
-                }
+                console.error('Error adding patient:', err);
+                alert('❌ Failed to add patient. Try again.');
             }
+        } else {
+            alert('⚠️ Please fill in all required fields.');
         }
     };
+
 
     const handleDischargePatient = async (id) => {
         try {
@@ -154,6 +138,11 @@ const PatientListPage = () => {
             setError('Failed to load patient details');
         }
     };
+
+    const handlePatientUpdated = async () => {
+        await fetchPatients();   // Refresh list again
+    };
+
 
     const getGenderDisplay = (gender) => {
         switch (gender.toLowerCase()) {
@@ -235,9 +224,10 @@ const PatientListPage = () => {
                 onBack={() => {
                     setShowPatientInfo(false);
                     setSelectedPatient(null);
+                    fetchPatients(); // refresh list when going back
                 }}
                 onDischarge={handleDischargePatient}
-                hospitalStructure={hospitalStructure} // Pass structure for update location modal
+                onUpdated={handlePatientUpdated}   // ⬅️ pass update callback
             />
         );
     }
@@ -570,6 +560,7 @@ const PatientListPage = () => {
                         <h3 className="text-lg font-semibold text-gray-800 mb-4">Add New Patient</h3>
 
                         <div className="space-y-4">
+                            {/* 🔹 Full Name */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                                 <input
@@ -581,7 +572,9 @@ const PatientListPage = () => {
                                 />
                             </div>
 
+                            {/* 🔹 Age & Gender Side by Side */}
                             <div className="grid grid-cols-2 gap-4">
+                                {/* Age */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
                                     <input
@@ -589,10 +582,11 @@ const PatientListPage = () => {
                                         value={newPatient.age}
                                         onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="Age"
+                                        placeholder="Enter age"
                                     />
                                 </div>
 
+                                {/* Gender */}
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
                                     <select
@@ -607,6 +601,7 @@ const PatientListPage = () => {
                                 </div>
                             </div>
 
+                            {/* 🔹 Contact Number */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
                                 <input
@@ -617,70 +612,9 @@ const PatientListPage = () => {
                                     placeholder="Enter contact number"
                                 />
                             </div>
-
-                            {/* --- Dynamic Floor, Ward, Bed Selection for Add Patient --- */}
-                            <div className="grid grid-cols-1 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Floor</label>
-                                    <select
-                                        value={newPatient.floor}
-                                        onChange={(e) => {
-                                            setNewPatient({ ...newPatient, floor: e.target.value, ward: '', bed: '' });
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    >
-                                        <option value="">Select floor</option>
-                                        {getFloorOptions().map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ward</label>
-                                    <select
-                                        value={newPatient.ward}
-                                        onChange={(e) => {
-                                            setNewPatient({ ...newPatient, ward: e.target.value, bed: '' });
-                                        }}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={!newPatient.floor}
-                                    >
-                                        <option value="">Select ward</option>
-                                        {getWardOptions(newPatient.floor).map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Bed</label>
-                                    <select
-                                        value={newPatient.bed}
-                                        onChange={(e) => setNewPatient({ ...newPatient, bed: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        disabled={!newPatient.ward}
-                                    >
-                                        <option value="">Select bed</option>
-                                        {getBedOptions(newPatient.ward).map(option => (
-                                            <option key={option.value} value={option.value}>{option.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Optional: Display the auto-set admission time */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Admission Date & Time (Auto-set)</label>
-                                <input
-                                    type="datetime-local"
-                                    value={new Date().toISOString().slice(0, 16)} // Show current time, but user cannot edit
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
-                                    readOnly
-                                />
-                            </div>
                         </div>
 
+                        {/* Buttons */}
                         <div className="flex justify-end gap-3 mt-6">
                             <button
                                 onClick={() => setShowAddModal(false)}
@@ -698,6 +632,9 @@ const PatientListPage = () => {
                     </div>
                 </div>
             )}
+
+
+
         </div>
     );
 };

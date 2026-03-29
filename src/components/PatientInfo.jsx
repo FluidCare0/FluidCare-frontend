@@ -2,17 +2,16 @@ import React, { useState, useEffect } from 'react';
 import Card from './Card';
 import { patientApiService } from '../api/patientApi';
 
-const PatientInfo = ({ patient, onBack, onDischarge }) => {
+const PatientInfo = ({ patient, onBack, onDischarge, onUpdated }) => {
+
     const [patientDetail, setPatientDetail] = useState(patient);
     const [loading, setLoading] = useState(false);
     const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
 
-    // --- State for Update Modals ---
     const [showUpdatePersonalModal, setShowUpdatePersonalModal] = useState(false);
     const [showUpdateLocationModal, setShowUpdateLocationModal] = useState(false);
     const [showUpdateAdmissionModal, setShowUpdateAdmissionModal] = useState(false);
 
-    // --- State for Update Data ---
     const [personalData, setPersonalData] = useState({
         name: patient.name,
         age: patient.age,
@@ -25,9 +24,11 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
         ward: patient.current_ward || patient.ward || null,
         bed: patient.current_bed || patient.bed || null,
     });
-    const [selectedFloor, setSelectedFloor] = useState(locationData.floor);
-    const [selectedWard, setSelectedWard] = useState(locationData.ward);
-    const [selectedBed, setSelectedBed] = useState(locationData.bed);
+
+    const [selectedFloor, setSelectedFloor] = useState(Number(locationData.floor));
+    const [selectedWard, setSelectedWard] = useState(Number(locationData.ward));
+    const [selectedBed, setSelectedBed] = useState(Number(locationData.bed));
+
 
     const [admissionData, setAdmissionData] = useState({
         admitted_at: patient.admitted_at,
@@ -52,9 +53,6 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
                     setLoadingStructure(true);
                     const structure = await patientApiService.getHospitalStructure();
                     setHospitalStructure(structure);
-                } catch (error) {
-                    console.error('Error fetching hospital structure:', error);
-                    alert('Failed to load hospital structure.');
                 } finally {
                     setLoadingStructure(false);
                 }
@@ -62,6 +60,12 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
         };
         fetchStructure();
     }, [showUpdateLocationModal]);
+
+    const handleDischarge = async () => {
+        await onDischarge(patient.id);
+        if (onUpdated) onUpdated();
+        setShowDischargeConfirm(false);
+    };
 
     // Update available beds when floor or ward changes in location modal
     useEffect(() => {
@@ -194,15 +198,9 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
 
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        // Use toLocaleString for a more readable date and time format
-        return date.toLocaleString(); // e.g., "10/12/2025, 2:30:45 PM"
+        return new Date(dateString).toLocaleString();
     };
 
-    const handleDischarge = () => {
-        onDischarge(patient.id);
-        setShowDischargeConfirm(false);
-    };
 
     // --- Personal Info Modal Handlers ---
     const handleOpenUpdatePersonalModal = () => {
@@ -230,13 +228,12 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
     };
 
     const validatePersonalForm = () => {
-        const newErrors = {};
-        if (!personalData.name?.trim()) newErrors.name = 'Name is required';
-        if (!personalData.age || personalData.age <= 0) newErrors.age = 'Valid age is required';
-        if (!personalData.gender) newErrors.gender = 'Gender is required';
-        if (!String(personalData.contact).trim()) newErrors.contact = 'Contact is required';
-        setPersonalErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const errors = {};
+        if (!personalData.name) errors.name = "Required";
+        if (!personalData.age) errors.age = "Required";
+        if (!personalData.contact) errors.contact = "Required";
+        setPersonalErrors(errors);
+        return Object.keys(errors).length === 0;
     };
 
     const handleUpdatePersonalSubmit = async () => {
@@ -245,11 +242,14 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
         try {
             setLoading(true);
             const updatedPatient = await patientApiService.updatePatient(patientDetail.id, personalData);
+
             setPatientDetail(updatedPatient);
-            handleCloseUpdatePersonalModal();
-        } catch (error) {
-            console.error('Error updating personal info:', error);
-            alert('Failed to update personal information. Please try again.');
+            setShowUpdatePersonalModal(false);
+
+            // 🔥 REFRESH LIST
+            if (onUpdated) onUpdated();
+        } catch {
+            alert("Failed to update");
         } finally {
             setLoading(false);
         }
@@ -271,25 +271,27 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
 
     const handleLocationChange = (e) => {
         const { name, value } = e.target;
+
         if (name === 'floor') {
-            setSelectedFloor(value);
-            setSelectedWard(''); // Reset ward when floor changes
-            setSelectedBed(''); // Reset bed when floor changes
-        } else if (name === 'ward') {
-            setSelectedWard(value);
-            setSelectedBed(''); // Reset bed when ward changes
-        } else if (name === 'bed') {
-            setSelectedBed(value);
+            setSelectedFloor(Number(value));
+            setSelectedWard(null);
+            setSelectedBed(null);
+        }
+        else if (name === 'ward') {
+            setSelectedWard(Number(value));
+            setSelectedBed(null);
+        }
+        else if (name === 'bed') {
+            setSelectedBed(Number(value));
         }
     };
 
+
     const validateLocationForm = () => {
-        const newErrors = {};
-        if ((selectedFloor || selectedWard || selectedBed) && !selectedBed) {
-            newErrors.location = 'Please select a specific bed.';
-        }
-        setLocationErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        const errors = {};
+        if (!selectedBed) errors.location = "Select bed";
+        setLocationErrors(errors);
+        return !errors.location;
     };
 
     const handleUpdateLocationSubmit = async () => {
@@ -297,41 +299,36 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
 
         try {
             setLoading(true);
-            if (
-                selectedFloor !== (patientDetail.current_floor || patientDetail.floor) ||
-                selectedWard !== (patientDetail.current_ward || patientDetail.ward) ||
-                selectedBed !== (patientDetail.current_bed || patientDetail.bed)
-            ) {
-                // Find the bed ID based on selected values
-                let newBedId = null;
-                for (const floor of hospitalStructure) {
-                    if (floor.floor_number == selectedFloor) {
-                        for (const ward of floor.wards) {
-                            if (ward.ward_number == selectedWard) {
-                                for (const bed of ward.beds) {
-                                    if (bed.bed_number == selectedBed) {
-                                        newBedId = bed.id;
-                                        break;
-                                    }
+
+            let newBedId = null;
+
+            for (const floor of hospitalStructure) {
+                if (floor.floor_number == selectedFloor) {
+                    for (const ward of floor.wards) {
+                        if (ward.ward_number == selectedWard) {
+                            for (const bed of ward.beds) {
+                                if (bed.bed_number == selectedBed) {
+                                    newBedId = bed.id;
                                 }
-                                break;
                             }
                         }
-                        break;
                     }
                 }
-
-                if (newBedId) {
-                    await patientApiService.assignPatientToBed(patientDetail.id, newBedId);
-                    // Fetch updated patient details after bed assignment
-                    const updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
-                    setPatientDetail(updatedPatient);
-                }
             }
-            handleCloseUpdateLocationModal();
-        } catch (error) {
-            console.error('Error updating location:', error);
-            alert('Failed to update location. Please try again.');
+
+            if (newBedId) {
+                await patientApiService.assignPatientToBed(patientDetail.id, newBedId);
+
+                const updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
+                setPatientDetail(updatedPatient);
+
+                // 🔥 REFRESH LIST
+                if (onUpdated) onUpdated();
+            }
+
+            setShowUpdateLocationModal(false);
+        } catch {
+            alert("Failed to update location");
         } finally {
             setLoading(false);
         }
@@ -356,13 +353,16 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
     };
 
     const validateAdmissionForm = () => {
-        const newErrors = {};
-        if (!admissionData.admitted_at) newErrors.admitted_at = 'Admission date is required';
-        if (admissionData.discharged_at && new Date(admissionData.discharged_at) < new Date(admissionData.admitted_at)) {
-            newErrors.discharged_at = 'Discharge date cannot be before admission date';
+        const errors = {};
+        if (!admissionData.admitted_at) errors.admitted_at = "Required";
+
+        if (admissionData.discharged_at &&
+            new Date(admissionData.discharged_at) < new Date(admissionData.admitted_at)) {
+            errors.discharged_at = "Invalid";
         }
-        setAdmissionErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+
+        setAdmissionErrors(errors);
+        return Object.keys(errors).length === 0;
     };
 
     const handleUpdateAdmissionSubmit = async () => {
@@ -370,36 +370,23 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
 
         try {
             setLoading(true);
-            // Only update admission date if it's different
+
             let updatedPatient = patientDetail;
-            if (admissionData.admitted_at !== patientDetail.admitted_at) {
-                // Note: This requires an API endpoint that allows updating admission date
-                // For now, we'll just update discharge date if needed
-                if (admissionData.discharged_at !== patientDetail.discharged_at) {
-                    // If discharge date is being updated, call the discharge API
-                    if (admissionData.discharged_at) {
-                        updatedPatient = await patientApiService.dischargePatient(patientDetail.id, { discharged_at: admissionData.discharged_at });
-                    } else {
-                        // If trying to clear discharge date, you might need a specific API call
-                        // For now, we'll just fetch the latest details
-                        updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
-                    }
-                }
-            } else if (admissionData.discharged_at !== patientDetail.discharged_at) {
-                // If admission date is same, check discharge date update
-                if (admissionData.discharged_at) {
-                    updatedPatient = await patientApiService.dischargePatient(patientDetail.id, { discharged_at: admissionData.discharged_at });
-                } else {
-                    // If trying to clear discharge date, you might need a specific API call
-                    // For now, we'll just fetch the latest details
-                    updatedPatient = await patientApiService.getPatientDetail(patientDetail.id);
-                }
+
+            if (admissionData.discharged_at) {
+                updatedPatient = await patientApiService.dischargePatient(
+                    patientDetail.id,
+                    { discharged_at: admissionData.discharged_at }
+                );
             }
+
             setPatientDetail(updatedPatient);
-            handleCloseUpdateAdmissionModal();
-        } catch (error) {
-            console.error('Error updating admission info:', error);
-            alert('Failed to update admission information. Please try again.');
+            setShowUpdateAdmissionModal(false);
+
+            // 🔥 REFRESH LIST
+            if (onUpdated) onUpdated();
+        } catch {
+            alert("Failed to update admission info");
         } finally {
             setLoading(false);
         }
@@ -764,12 +751,13 @@ const PatientInfo = ({ patient, onBack, onDischarge }) => {
                                 >
                                     <option value="">Select Bed</option>
                                     {availableBeds
-                                        .filter(b => b.bed_number !== (patientDetail.current_bed || patientDetail.bed)) // Exclude current bed if not in same selection
+                                        .filter(b => (!b.is_occupied || b.bed_number === (patientDetail.current_bed || patientDetail.bed)))
                                         .map(bed => (
                                             <option key={bed.id} value={bed.bed_number}>
                                                 Bed {bed.bed_number}
                                             </option>
                                         ))}
+
                                 </select>
                                 {locationErrors.location && <p className="text-red-500 text-sm mt-1">{locationErrors.location}</p>}
                             </div>

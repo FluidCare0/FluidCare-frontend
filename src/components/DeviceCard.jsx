@@ -235,16 +235,17 @@ const DeviceCard = ({ device, onShowDetails, onDisconnect }) => {
                 <div className="flex-1 text-sm space-y-1.5">
                     <div className="text-gray-600">
                         <span className="font-medium text-gray-700">Device ID:</span>{' '}
-                        <span className="font-mono text-xs">{device?.deviceId || 'N/A'}</span>
+                        <span className="font-mono text-xs">{device?.id || 'N/A'}</span>
                     </div>
                     <div className="text-gray-600">
                         <span className="font-medium text-gray-700">Ward:</span>{' '}
-                        {device?.wardName || device?.wardNo || 'N/A'}
+                        {device?.ward || 'N/A'}
                     </div>
                     <div className="text-gray-600">
                         <span className="font-medium text-gray-700">Bed:</span>{' '}
-                        {device?.roomNo || 'N/A'}
+                        {device?.bed || 'N/A'}
                     </div>
+
                     <div className="text-gray-600">
                         <span className="font-medium text-gray-700">Patient:</span>{' '}
                         {device?.patient || 'No Patient'}

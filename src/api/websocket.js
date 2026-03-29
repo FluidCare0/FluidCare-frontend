@@ -128,11 +128,16 @@ class SensorWebSocket {
                 console.log('Subscription confirmed for floor:', data.floor);
                 this.notifyListeners('subscription', data);
                 break;
+            case 'node_id_request':
+                console.log('📩 Node ID request received from MAC:', data.mac);
+                this.notifyListeners('node_id_request', data);
+                break;
             default:
                 console.log('Unknown message type:', type);
                 this.notifyListeners('message', data);
         }
     }
+
 
     subscribeToFloor(floorNumber) {
         if (this.ws?.readyState === WebSocket.OPEN) {

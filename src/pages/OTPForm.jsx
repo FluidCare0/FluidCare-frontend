@@ -74,8 +74,8 @@ function OTPForm({ mobile, onLogin }) {
             onClick={verifyOTP}
             disabled={!otp || otp.length !== 6 || loading}
             className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-300 flex items-center justify-center ${otp && otp.length === 6 && !loading
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white hover:from-blue-700 hover:to-indigo-800 shadow-md hover:shadow-lg'
-                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white hover:from-blue-700 hover:to-indigo-800 shadow-md hover:shadow-lg'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
               }`}
           >
             {loading ? (
@@ -93,7 +93,7 @@ function OTPForm({ mobile, onLogin }) {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes blob {
           0% {
             transform: translate(0px, 0px) scale(1);
