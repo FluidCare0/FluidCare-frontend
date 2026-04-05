@@ -78,16 +78,17 @@ const HomePage = ({ onShowNotifications, onShowDetails }) => {
                     const updatedDevice = {
                         ...device,
                         level: Math.round(processedData.reading),
+                        smoothedWeight: processedData.smoothedWeight,
                         lastReading: processedData.timestamp,
-                        // ✅ Update status from WebSocket message if present
-                        status: processedData.status || device.status, // Use new status or keep old one if not provided
+                        status: processedData.status || device.status,
                         batteryPercent: processedData.batteryPercent
                     };
 
-                    // Calculate alert status based on thresholds
+                    // Calculate alert status based on smoothed value (falls back to raw level)
                     if (updatedDevice.fluidBag) {
+                        const alertValue = updatedDevice.smoothedWeight ?? updatedDevice.level;
                         const alertStatus = calculateDeviceStatus(
-                            updatedDevice.level,
+                            alertValue,
                             updatedDevice.fluidBag
                         );
                         updatedDevice.alertStatus = alertStatus;

@@ -43,13 +43,13 @@ export const transformDeviceData = (backendDevice) => {
 
 export const processSensorData = (sensorData) => {
     return {
-        nodeId: sensorData.nodeId, // Match the key from WebSocket message
-        nodeMac: sensorData.nodeMac, // Match the key from WebSocket message
-        reading: sensorData.level, // Use 'level' from WebSocket message
-        batteryPercent: sensorData.batteryPercent, // Match the key from WebSocket message
-        timestamp: new Date(sensorData.timestamp), // Convert string to Date object
-        status: sensorData.status, // ✅ INCLUDE STATUS from WebSocket
-        // Include other fields as needed
+        nodeId: sensorData.nodeId,
+        nodeMac: sensorData.nodeMac,
+        reading: sensorData.level,
+        smoothedWeight: sensorData.smoothedWeight ?? null,
+        batteryPercent: sensorData.batteryPercent,
+        timestamp: new Date(sensorData.timestamp),
+        status: sensorData.status,
     };
 };
 

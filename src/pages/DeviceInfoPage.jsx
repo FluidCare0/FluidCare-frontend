@@ -1,6 +1,6 @@
 // src/pages/DeviceInfoPage.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // Import API functions to fetch data
 import {
     getPatientDetailsByDevice,
@@ -65,6 +65,21 @@ const DeviceInfoPage = ({ device, onBack }) => {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    // Append a live history point whenever a new reading arrives via WebSocket
+    useEffect(() => {
+        if (device?.level == null) return;
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setFluidLevelHistory(prev => [
+            ...prev.slice(-59),  // keep last 60 points
+            {
+                time: timeLabel,
+                level: device.level,
+                smoothed: device.smoothedWeight ?? device.level,
+            }
+        ]);
+    }, [device?.level, device?.smoothedWeight]);
 
     // Refresh data handler
     const handleRefresh = () => {
@@ -188,6 +203,13 @@ const DeviceInfoPage = ({ device, onBack }) => {
                         <h3 className="font-medium text-gray-600">Battery</h3>
                         <p className="text-lg font-semibold">{device.batteryPercent !== null ? `${Math.round(device.batteryPercent)}%` : 'N/A'}</p>
                     </div>
+                    <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+                        <h3 className="font-medium text-blue-600">Smoothed Weight</h3>
+                        <p className="text-lg font-semibold text-blue-700">
+                            {device.smoothedWeight != null ? `${device.smoothedWeight.toFixed(1)} g` : 'N/A'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">EWMA α=0.2</p>
+                    </div>
                 </div>
             </div>
 
@@ -198,19 +220,30 @@ const DeviceInfoPage = ({ device, onBack }) => {
                     <LineChart data={fluidLevelHistory}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="time" />
-                        <YAxis domain={[0, 100]} />
+                        <YAxis />
                         <Tooltip
-                            formatter={(value) => [`${value}%`, 'Level']}
+                            formatter={(value, name) => [
+                                name === 'smoothed' ? `${Number(value).toFixed(1)} g` : `${value}`,
+                                name === 'smoothed' ? 'Smoothed (g)' : 'Raw level'
+                            ]}
                             labelFormatter={(label) => `Time: ${label}`}
                         />
+                        <Legend />
                         <Line
                             type="monotone"
                             dataKey="level"
+                            stroke="#94A3B8"
+                            strokeWidth={1}
+                            dot={false}
+                            name="Raw level"
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="smoothed"
                             stroke="#3B82F6"
-                            strokeWidth={2}
-                            name="Level (%)"
-                            dot={{ r: 4 }}
-                            activeDot={{ r: 6 }}
+                            strokeWidth={2.5}
+                            dot={false}
+                            name="Smoothed (g)"
                         />
                     </LineChart>
                 </ResponsiveContainer>
