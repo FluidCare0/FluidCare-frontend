@@ -1,358 +1,293 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { UserPlus, Users, LayoutDashboard } from 'lucide-react';
 import Card from '../components/Card';
-import PatientInfo from '../components/PatientInfo';
 import { patientApiService } from '../api/patientApi';
+
+const emptyPatient = {
+    name: '',
+    age: '',
+    gender: 'male',
+    contact: '',
+};
 
 const PatientListPage = () => {
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
+    const [error, setError] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
-    const [showAllPatients, setShowAllPatients] = useState(false); // State to control showing all patients
+    const [showAllPatients, setShowAllPatients] = useState(false);
+    const [selectedPatient, setSelectedPatient] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [filterFloor, setFilterFloor] = useState('');
     const [filterWard, setFilterWard] = useState('');
     const [filterGender, setFilterGender] = useState('');
-    // --- Add back floor, ward, bed to newPatient state ---
-
-    const [newPatient, setNewPatient] = useState({
-        name: '',
-        age: '',
-        gender: 'male',
-        contact: '',
-    });
-    const [selectedPatient, setSelectedPatient] = useState(null);
-    const [showPatientInfo, setShowPatientInfo] = useState(false);
-
-    // --- State for Dynamic Dropdowns (for Add Patient modal) ---
-    const [hospitalStructure, setHospitalStructure] = useState([]);
-    const [loadingStructure, setLoadingStructure] = useState(false);
-
-    useEffect(() => {
-        fetchPatients();
-    }, [showAllPatients, searchTerm, filterStatus, filterFloor, filterWard, filterGender]);
-
-    // --- Fetch Hospital Structure ---
-    useEffect(() => {
-        const fetchStructure = async () => {
-            try {
-                setLoadingStructure(true);
-                const structure = await patientApiService.getHospitalStructure();
-                setHospitalStructure(structure);
-            } catch (err) {
-                console.error('Error fetching hospital structure:', err);
-                setError('Failed to load hospital structure');
-            } finally {
-                setLoadingStructure(false);
-            }
-        };
-
-        fetchStructure();
-    }, []);
+    const [newPatient, setNewPatient] = useState(emptyPatient);
 
     const fetchPatients = async () => {
         try {
             setLoading(true);
+            setError('');
             const filters = {};
-            if (searchTerm) filters.search = searchTerm;
-            if (filterStatus !== 'all') filters.status = filterStatus;
-            if (filterGender) filters.gender = filterGender;
+
+            if (searchTerm) {
+                filters.search = searchTerm;
+            }
+
+            if (filterStatus !== 'all') {
+                filters.status = filterStatus;
+            }
+
+            if (filterGender) {
+                filters.gender = filterGender;
+            }
 
             const data = await patientApiService.getAllPatients(filters);
-            setPatients(data);
-            setError(null);
+            setPatients(Array.isArray(data) ? data : []);
         } catch (err) {
-            console.error('Error fetching patients:', err);
-            setError('Failed to load patients');
+            console.error('Failed to load patients:', err);
+            setError('Failed to load patients.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleAddPatient = async () => {
-        if (newPatient.name && newPatient.age && newPatient.contact) {
-            try {
-                const patientData = {
-                    name: newPatient.name,
-                    age: parseInt(newPatient.age),
-                    gender: 'male', // default gender
-                    contact: parseInt(newPatient.contact),
-                    admitted_at: new Date().toISOString(),
-                };
+    useEffect(() => {
+        fetchPatients();
+    }, [filterGender, filterStatus, searchTerm]);
 
-                const newPatientData = await patientApiService.createPatient(patientData);
+    const filteredPatients = useMemo(() => {
+        let result = showAllPatients
+            ? [...patients]
+            : patients.filter((patient) => !patient.discharged_at);
 
-                // Add the new patient directly to the list
-                setPatients([...patients, newPatientData]);
-
-                // Reset the form
-                setNewPatient({
-                    name: '',
-                    age: '',
-                    gender: 'male',
-                    contact: '',
-                });
-
-                // Close modal
-                setShowAddModal(false);
-
-                alert('✅ Patient added successfully!');
-            } catch (err) {
-                console.error('Error adding patient:', err);
-                alert('❌ Failed to add patient. Try again.');
-            }
-        } else {
-            alert('⚠️ Please fill in all required fields.');
+        if (searchTerm) {
+            const query = searchTerm.toLowerCase();
+            result = result.filter((patient) => {
+                return (
+                    patient.name?.toLowerCase().includes(query) ||
+                    String(patient.id).includes(query) ||
+                    String(patient.contact || '').includes(query) ||
+                    String(patient.floor || '').includes(query) ||
+                    String(patient.ward || '').includes(query) ||
+                    String(patient.bed || '').includes(query)
+                );
+            });
         }
-    };
 
-
-    const handleDischargePatient = async (id) => {
-        try {
-            const dischargeData = { discharged_at: new Date().toISOString() };
-            const updatedPatient = await patientApiService.dischargePatient(id, dischargeData);
-
-            setPatients(patients.map(patient =>
-                patient.id === id ? updatedPatient : patient
-            ));
-
-            if (showPatientInfo && selectedPatient && selectedPatient.id === id) {
-                setShowPatientInfo(false);
-                setSelectedPatient(null);
-            }
-        } catch (err) {
-            console.error('Error discharging patient:', err);
-            setError('Failed to discharge patient');
+        if (filterFloor) {
+            result = result.filter((patient) => String(patient.floor) === filterFloor);
         }
-    };
 
-    const handleViewPatientInfo = async (patientId) => {
-        try {
-            const patientDetail = await patientApiService.getPatientDetail(patientId);
-            setSelectedPatient(patientDetail);
-            setShowPatientInfo(true);
-        } catch (err) {
-            console.error('Error fetching patient detail:', err);
-            setError('Failed to load patient details');
+        if (filterWard) {
+            result = result.filter((patient) => String(patient.ward) === filterWard);
         }
-    };
 
-    const handlePatientUpdated = async () => {
-        await fetchPatients();   // Refresh list again
-    };
+        return result;
+    }, [filterFloor, filterWard, patients, searchTerm, showAllPatients]);
 
+    const recentAdmitted = useMemo(() => {
+        return [...patients]
+            .filter((patient) => patient.admitted_at && !patient.discharged_at)
+            .sort((left, right) => new Date(right.admitted_at) - new Date(left.admitted_at))
+            .slice(0, 5);
+    }, [patients]);
+
+    const recentDischarged = useMemo(() => {
+        return [...patients]
+            .filter((patient) => patient.discharged_at)
+            .sort((left, right) => new Date(right.discharged_at) - new Date(left.discharged_at))
+            .slice(0, 5);
+    }, [patients]);
+
+    const uniqueFloors = useMemo(() => {
+        return [...new Set(patients.map((patient) => patient.floor).filter((value) => value != null))];
+    }, [patients]);
+
+    const uniqueWards = useMemo(() => {
+        return [...new Set(patients.map((patient) => patient.ward).filter((value) => value != null))];
+    }, [patients]);
+
+    const uniqueGenders = useMemo(() => {
+        return [...new Set(patients.map((patient) => patient.gender).filter(Boolean))];
+    }, [patients]);
+
+    const formatDate = (value) => {
+        if (!value) {
+            return 'N/A';
+        }
+
+        return new Date(value).toLocaleString();
+    };
 
     const getGenderDisplay = (gender) => {
-        switch (gender.toLowerCase()) {
-            case 'male':
-                return 'Male';
-            case 'female':
-                return 'Female';
-            case 'other':
-                return 'Other';
-            default:
-                return gender;
+        if (!gender) {
+            return 'N/A';
+        }
+
+        const normalized = gender.toLowerCase();
+
+        if (normalized === 'male') {
+            return 'Male';
+        }
+
+        if (normalized === 'female') {
+            return 'Female';
+        }
+
+        if (normalized === 'other') {
+            return 'Other';
+        }
+
+        return gender;
+    };
+
+    const handleAddPatient = async () => {
+        if (!newPatient.name || !newPatient.age || !newPatient.contact) {
+            window.alert('Please fill in all required fields.');
+            return;
+        }
+
+        try {
+            const payload = {
+                name: newPatient.name,
+                age: Number(newPatient.age),
+                gender: newPatient.gender,
+                contact: newPatient.contact,
+                admitted_at: new Date().toISOString(),
+            };
+
+            await patientApiService.createPatient(payload);
+            setNewPatient(emptyPatient);
+            setShowAddModal(false);
+            await fetchPatients();
+        } catch (err) {
+            console.error('Failed to add patient:', err);
+            window.alert('Failed to add patient.');
         }
     };
 
-    // Updated formatDate function to show both date and time
-    const formatDate = (dateString) => {
-        if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        // Use toLocaleString() to show both date and time
-        return date.toLocaleString(); // Example: "10/11/2025, 2:30:00 PM"
+    const handleViewPatient = async (patientId) => {
+        try {
+            const detail = await patientApiService.getPatientDetail(patientId);
+            setSelectedPatient(detail);
+        } catch (err) {
+            console.error('Failed to load patient details:', err);
+            window.alert('Failed to load patient details.');
+        }
     };
 
-    const activePatients = patients.filter(patient => !patient.discharged_at);
+    const handleDischargePatient = async (patientId) => {
+        try {
+            const payload = {
+                discharged_at: new Date().toISOString(),
+            };
 
-    // Apply filters and search for the main list view (when showAllPatients is true)
-    let filteredPatients = showAllPatients ? patients : activePatients;
-
-    if (searchTerm) {
-        filteredPatients = filteredPatients.filter(patient =>
-            patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            patient.id.toString().includes(searchTerm) ||
-            patient.contact.toString().includes(searchTerm) ||
-            patient.floor?.toString().includes(searchTerm) || // Compare with floor number string
-            patient.ward?.toString().includes(searchTerm) ||   // Compare with ward number string
-            patient.bed?.toString().includes(searchTerm)       // Compare with bed number string
-        );
-    }
-
-    if (filterStatus === 'active') {
-        filteredPatients = filteredPatients.filter(patient => !patient.discharged_at);
-    } else if (filterStatus === 'discharged') {
-        filteredPatients = filteredPatients.filter(patient => patient.discharged_at);
-    }
-
-    if (filterFloor) {
-        filteredPatients = filteredPatients.filter(patient => patient.floor === parseInt(filterFloor));
-    }
-
-    if (filterWard) {
-        filteredPatients = filteredPatients.filter(patient => patient.ward === parseInt(filterWard));
-    }
-
-    if (filterGender) {
-        filteredPatients = filteredPatients.filter(patient => patient.gender === filterGender);
-    }
-
-    // Calculate unique values based on the list serializer data (floor, ward as numbers/strings)
-    const uniqueFloors = [...new Set(patients.filter(p => p.floor != null).map(p => p.floor.toString()))];
-    const uniqueWards = [...new Set(patients.filter(p => p.ward != null).map(p => p.ward.toString()))];
-    const uniqueGenders = [...new Set(patients.map(p => p.gender))];
-
-    // --- Logic for Recent Patients ---
-    // Sort patients by admitted_at or discharged_at, then take top 5
-    const recentAdmitted = [...patients]
-        .filter(p => p.admitted_at) // Ensure admitted_at exists
-        .sort((a, b) => new Date(b.admitted_at) - new Date(a.admitted_at))
-        .slice(0, 5);
-
-    const recentDischarged = [...patients]
-        .filter(p => p.discharged_at) // Ensure discharged_at exists
-        .sort((a, b) => new Date(b.discharged_at) - new Date(a.discharged_at))
-        .slice(0, 5);
-
-    if (showPatientInfo && selectedPatient) {
-        // Pass the handleDischargePatient function to PatientInfo
-        return (
-            <PatientInfo
-                patient={selectedPatient}
-                onBack={() => {
-                    setShowPatientInfo(false);
-                    setSelectedPatient(null);
-                    fetchPatients(); // refresh list when going back
-                }}
-                onDischarge={handleDischargePatient}
-                onUpdated={handlePatientUpdated}   // ⬅️ pass update callback
-            />
-        );
-    }
+            await patientApiService.dischargePatient(patientId, payload);
+            setSelectedPatient(null);
+            await fetchPatients();
+        } catch (err) {
+            console.error('Failed to discharge patient:', err);
+            window.alert('Failed to discharge patient.');
+        }
+    };
 
     if (loading) {
         return (
-            <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
-                <div className="text-lg text-gray-600">Loading patients...</div>
+            <div className="min-h-screen bg-gray-50 p-8">
+                <div className="flex h-64 items-center justify-center text-lg text-gray-600">
+                    Loading patients...
+                </div>
             </div>
         );
     }
 
-    // --- Helper Functions for Dropdown Options ---
-    const getFloorOptions = () => {
-        return hospitalStructure.map(floor => ({
-            value: floor.id,
-            label: `Floor ${floor.floor_number} (${floor.name || 'Unnamed'})`
-        }));
-    };
-
-    const getWardOptions = (floorId) => {
-        if (!floorId) return [];
-        const floor = hospitalStructure.find(f => f.id === parseInt(floorId));
-        if (!floor) return [];
-        return floor.wards.map(ward => ({
-            value: ward.id,
-            label: `Ward ${ward.ward_number} (${ward.name})`
-        }));
-    };
-
-    const getBedOptions = (wardId) => {
-        if (!wardId) return [];
-        for (const floor of hospitalStructure) {
-            const ward = floor.wards.find(w => w.id === parseInt(wardId));
-            if (ward) {
-                return ward.beds
-                    .filter(bed => !bed.is_occupied) // Only show unoccupied beds
-                    .map(bed => ({
-                        value: bed.id,
-                        label: `Bed ${bed.bed_number}`
-                    }));
-            }
-        }
-        return [];
-    };
-
     return (
-        <div className="p-8">
-            {/* Error Message */}
+        <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Patient Management</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                        {showAllPatients ? 'Full directory of all registered patients' : 'Overview of recent patient activity'}
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setShowAllPatients(!showAllPatients)}
+                        className="flex flex-1 justify-center items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm border border-gray-300 hover:bg-gray-50 transition-colors sm:flex-none"
+                    >
+                        {showAllPatients ? <LayoutDashboard size={18} /> : <Users size={18} />}
+                        {showAllPatients ? 'Summary View' : 'All Patients'}
+                    </button>
+                    <button
+                        onClick={() => setShowAddModal(true)}
+                        className="flex flex-1 justify-center items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors sm:flex-none"
+                    >
+                        <UserPlus size={18} /> Add Patient
+                    </button>
+                </div>
+            </div>
+
             {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                <div className="mb-6 border border-red-300 bg-red-50 px-4 py-3 text-red-700">
                     {error}
                 </div>
             )}
 
-            {/* --- Conditional Rendering: Show Cards and Recent Tables OR Main List --- */}
             {!showAllPatients ? (
                 <>
-                    {/* Two Cards Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        {/* Add New Patient Card */}
-                        <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                </svg>
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Add New Patient</h3>
-                            <p className="text-gray-600 mb-4">Register a new patient in the system</p>
-                            <button
-                                onClick={() => setShowAddModal(true)}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                            >
-                                Add Patient
-                            </button>
-                        </Card>
-
-                        {/* Show All Patients Card */}
-                        <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-                            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                </svg>
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-800 mb-2">Show All Patients</h3>
-                            <p className="text-gray-600 mb-2">View complete patient list</p>
-
-                            <button
-                                onClick={() => setShowAllPatients(true)} // Set to true to show main list
-                                className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-                            >
-                                Show All Patients
-                            </button>
-                        </Card>
-                    </div>
-
-                    {/* --- Recent Admitted Patients Table --- */}
-                    <Card className="p-6 mb-8">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Recently Admitted Patients</h3>
+                    <Card className="mb-8 p-6">
+                        <h3 className="mb-4 text-lg font-semibold text-gray-800">
+                            Recently Admitted Patients
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admitted At</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Floor</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ward</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Name
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Admitted At
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Floor
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Ward
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Bed
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Action
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                <tbody className="divide-y divide-gray-200 bg-white">
                                     {recentAdmitted.map((patient) => (
                                         <tr key={patient.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{formatDate(patient.admitted_at)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.floor || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.ward || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.bed || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                                                {patient.name}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {formatDate(patient.admitted_at)}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.floor || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.ward || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.bed || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm font-medium">
                                                 <button
-                                                    onClick={() => handleViewPatientInfo(patient.id)}
-                                                    className="text-blue-600 hover:text-blue-900"
+                                                    onClick={() => handleViewPatient(patient.id)}
+                                                    className="text-blue-600 hover:text-blue-800"
                                                 >
-                                                    Update
+                                                    View
                                                 </button>
                                             </td>
                                         </tr>
@@ -362,35 +297,58 @@ const PatientListPage = () => {
                         </div>
                     </Card>
 
-                    {/* --- Recent Discharged Patients Table --- */}
-                    <Card className="p-6 mb-8">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Recently Discharged Patients</h3>
+                    <Card className="p-6">
+                        <h3 className="mb-4 text-lg font-semibold text-gray-800">
+                            Recently Discharged Patients
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discharged At</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Floor</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ward</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Name
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Discharged At
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Floor
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Ward
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Bed
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Action
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                <tbody className="divide-y divide-gray-200 bg-white">
                                     {recentDischarged.map((patient) => (
                                         <tr key={patient.id} className="hover:bg-gray-50">
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{formatDate(patient.discharged_at)}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.floor || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.ward || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{patient.bed || 'N/A'}</td>
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium">
+                                            <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                                                {patient.name}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {formatDate(patient.discharged_at)}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.floor || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.ward || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm text-gray-700">
+                                                {patient.bed || 'N/A'}
+                                            </td>
+                                            <td className="px-4 py-2 text-sm font-medium">
                                                 <button
-                                                    onClick={() => handleViewPatientInfo(patient.id)}
-                                                    className="text-blue-600 hover:text-blue-900"
+                                                    onClick={() => handleViewPatient(patient.id)}
+                                                    className="text-blue-600 hover:text-blue-800"
                                                 >
-                                                    Info
+                                                    View
                                                 </button>
                                             </td>
                                         </tr>
@@ -401,25 +359,29 @@ const PatientListPage = () => {
                     </Card>
                 </>
             ) : (
-                // --- Main Patient List Table and Filters (Conditional) ---
                 <>
-                    {/* Filter and Search Section for Main List */}
-                    <Card className="p-6 mb-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                            <div className="lg:col-span-2">
+                    <Card className="mb-6 p-4 sm:p-6">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+                            <div className="sm:col-span-2">
+                                <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                                    Search
+                                </label>
                                 <input
                                     type="text"
-                                    placeholder="Search patients..."
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(event) => setSearchTerm(event.target.value)}
+                                    placeholder="Name, ID, Bed..."
+                                    className="w-full border border-gray-300 px-4 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                             <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                                    Status
+                                </label>
                                 <select
                                     value={filterStatus}
-                                    onChange={(e) => setFilterStatus(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(event) => setFilterStatus(event.target.value)}
+                                    className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="all">All Status</option>
                                     <option value="active">Active</option>
@@ -427,121 +389,144 @@ const PatientListPage = () => {
                                 </select>
                             </div>
                             <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                                    Floor
+                                </label>
                                 <select
                                     value={filterFloor}
-                                    onChange={(e) => setFilterFloor(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(event) => setFilterFloor(event.target.value)}
+                                    className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">All Floors</option>
-                                    {uniqueFloors.map(floor => (
-                                        <option key={floor} value={floor}>{floor}</option>
+                                    {uniqueFloors.map((floor) => (
+                                        <option key={floor} value={String(floor)}>
+                                            Floor {floor}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
                             <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                                    Ward
+                                </label>
                                 <select
                                     value={filterWard}
-                                    onChange={(e) => setFilterWard(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(event) => setFilterWard(event.target.value)}
+                                    className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">All Wards</option>
-                                    {uniqueWards.map(ward => (
-                                        <option key={ward} value={ward}>{ward}</option>
+                                    {uniqueWards.map((ward) => (
+                                        <option key={ward} value={String(ward)}>
+                                            Ward {ward}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
                             <div>
+                                <label className="mb-1 block text-xs font-semibold uppercase text-gray-500">
+                                    Gender
+                                </label>
                                 <select
                                     value={filterGender}
-                                    onChange={(e) => setFilterGender(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    onChange={(event) => setFilterGender(event.target.value)}
+                                    className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 >
                                     <option value="">All Genders</option>
-                                    {uniqueGenders.map(gender => (
-                                        <option key={gender} value={gender}>{getGenderDisplay(gender)}</option>
+                                    {uniqueGenders.map((gender) => (
+                                        <option key={gender} value={gender}>
+                                            {getGenderDisplay(gender)}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
                         </div>
                     </Card>
 
-                    {/* Main Patients List Section */}
-                    <Card className="p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="text-xl font-semibold text-gray-800">
-                                List of All Patients
-                            </h3>
-                            <div className="flex items-center space-x-4">
-                                <div className="text-sm text-gray-600">
-                                    Showing {filteredPatients.length} of {patients.length} patients
-                                </div>
-                                {/* Button to go back to the summary view */}
-                                <button
-                                    onClick={() => setShowAllPatients(false)} // Set to false to show summary view
-                                    className="px-4 py-2 bg-gray-500 text-white rounded-lg font-medium hover:bg-gray-600 transition-colors"
-                                >
-                                    Back to Summary
-                                </button>
-                            </div>
+                    <Card className="p-4 sm:p-6">
+                        <div className="mb-6">
+                            <h3 className="text-xl font-bold text-gray-800">Patient Directory</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                                Showing {filteredPatients.length} records
+                            </p>
                         </div>
 
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Age</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gender</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Admitted At</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Floor</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ward</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bed</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Name
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Age
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Gender
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Contact
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Admitted At
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Floor
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Ward
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Bed
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Status
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                                            Action
+                                        </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
+                                <tbody className="divide-y divide-gray-200 bg-white">
                                     {filteredPatients.map((patient) => (
                                         <tr key={patient.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900">{patient.name}</div>
+                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                                                {patient.name}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{patient.age}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">{patient.age}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {getGenderDisplay(patient.gender)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{getGenderDisplay(patient.gender)}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {patient.contact}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{patient.contact}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {formatDate(patient.admitted_at)}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{formatDate(patient.admitted_at)}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {patient.floor || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{patient.floor}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {patient.ward || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{patient.ward}</div>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                {patient.bed || 'N/A'}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm text-gray-900">{patient.bed}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${patient.discharged_at
-                                                    ? 'bg-red-100 text-red-800'
-                                                    : 'bg-green-100 text-green-800'
-                                                    }`}>
+                                            <td className="px-6 py-4 text-sm text-gray-700">
+                                                <span
+                                                    className={`inline-flex px-2 py-1 text-xs font-semibold ${patient.discharged_at
+                                                            ? 'bg-red-100 text-red-800'
+                                                            : 'bg-green-100 text-green-800'
+                                                        }`}
+                                                >
                                                     {patient.discharged_at ? 'Discharged' : 'Active'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <td className="px-6 py-4 text-sm font-medium">
                                                 <button
-                                                    onClick={() => handleViewPatientInfo(patient.id)}
-                                                    className="text-blue-600 hover:text-blue-900"
+                                                    onClick={() => handleViewPatient(patient.id)}
+                                                    className="text-blue-600 hover:text-blue-800"
                                                 >
-                                                    Update
+                                                    View
                                                 </button>
                                             </td>
                                         </tr>
@@ -553,46 +538,68 @@ const PatientListPage = () => {
                 </>
             )}
 
-            {/* Add Patient Modal */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Add New Patient</h3>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="w-full max-w-md bg-white p-6 shadow-2xl">
+                        <div className="mb-6 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-gray-800">Add New Patient</h3>
+                            <button
+                                onClick={() => setShowAddModal(false)}
+                                className="text-xl text-gray-400 hover:text-gray-600"
+                            >
+                                ×
+                            </button>
+                        </div>
 
                         <div className="space-y-4">
-                            {/* 🔹 Full Name */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                                    Full Name
+                                </label>
                                 <input
                                     type="text"
                                     value={newPatient.name}
-                                    onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Enter patient name"
+                                    onChange={(event) =>
+                                        setNewPatient((current) => ({
+                                            ...current,
+                                            name: event.target.value,
+                                        }))
+                                    }
+                                    className="w-full border border-gray-300 px-4 py-2.5 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
 
-                            {/* 🔹 Age & Gender Side by Side */}
                             <div className="grid grid-cols-2 gap-4">
-                                {/* Age */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                                    <label className="mb-1 block text-sm font-semibold text-gray-700">
+                                        Age
+                                    </label>
                                     <input
                                         type="number"
                                         value={newPatient.age}
-                                        onChange={(e) => setNewPatient({ ...newPatient, age: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="Enter age"
+                                        onChange={(event) =>
+                                            setNewPatient((current) => ({
+                                                ...current,
+                                                age: event.target.value,
+                                            }))
+                                        }
+                                        className="w-full border border-gray-300 px-4 py-2.5 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
 
-                                {/* Gender */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                                    <label className="mb-1 block text-sm font-semibold text-gray-700">
+                                        Gender
+                                    </label>
                                     <select
                                         value={newPatient.gender}
-                                        onChange={(e) => setNewPatient({ ...newPatient, gender: e.target.value })}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        onChange={(event) =>
+                                            setNewPatient((current) => ({
+                                                ...current,
+                                                gender: event.target.value,
+                                            }))
+                                        }
+                                        className="w-full border border-gray-300 bg-white px-4 py-2.5 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                     >
                                         <option value="male">Male</option>
                                         <option value="female">Female</option>
@@ -601,40 +608,121 @@ const PatientListPage = () => {
                                 </div>
                             </div>
 
-                            {/* 🔹 Contact Number */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Number</label>
+                                <label className="mb-1 block text-sm font-semibold text-gray-700">
+                                    Contact Number
+                                </label>
                                 <input
                                     type="tel"
                                     value={newPatient.contact}
-                                    onChange={(e) => setNewPatient({ ...newPatient, contact: e.target.value })}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    placeholder="Enter contact number"
+                                    onChange={(event) =>
+                                        setNewPatient((current) => ({
+                                            ...current,
+                                            contact: event.target.value,
+                                        }))
+                                    }
+                                    className="w-full border border-gray-300 px-4 py-2.5 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
                         </div>
 
-                        {/* Buttons */}
-                        <div className="flex justify-end gap-3 mt-6">
+                        <div className="mt-8 flex justify-end gap-3">
                             <button
                                 onClick={() => setShowAddModal(false)}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                className="bg-gray-100 px-6 py-2.5 font-bold text-gray-700 hover:bg-gray-200"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={handleAddPatient}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                className="bg-blue-600 px-6 py-2.5 font-bold text-white hover:bg-blue-700"
                             >
-                                Add Patient
+                                Register Patient
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
+            {selectedPatient && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                    <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto bg-white p-6 shadow-2xl">
+                        <div className="mb-6 flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-800">
+                                    {selectedPatient.name}
+                                </h3>
+                                <p className="mt-1 text-sm text-gray-500">
+                                    Patient ID #{selectedPatient.id}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setSelectedPatient(null)}
+                                className="text-2xl text-gray-400 hover:text-gray-600"
+                            >
+                                ×
+                            </button>
+                        </div>
 
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Age</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {selectedPatient.age}
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Gender</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {getGenderDisplay(selectedPatient.gender)}
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Contact</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {selectedPatient.contact || 'N/A'}
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Admitted At</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {formatDate(selectedPatient.admitted_at)}
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Current Floor</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {selectedPatient.current_floor || selectedPatient.floor || 'N/A'}
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Current Ward / Bed</p>
+                                <p className="mt-1 text-lg font-semibold text-gray-900">
+                                    {selectedPatient.current_ward || selectedPatient.ward || 'N/A'} /{' '}
+                                    {selectedPatient.current_bed || selectedPatient.bed || 'N/A'}
+                                </p>
+                            </Card>
+                        </div>
 
+                        <div className="mt-8 flex justify-end gap-3">
+                            <button
+                                onClick={() => setSelectedPatient(null)}
+                                className="bg-gray-100 px-4 py-2 font-medium text-gray-700 hover:bg-gray-200"
+                            >
+                                Close
+                            </button>
+                            {!selectedPatient.discharged_at && (
+                                <button
+                                    onClick={() => handleDischargePatient(selectedPatient.id)}
+                                    className="bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
+                                >
+                                    Discharge Patient
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

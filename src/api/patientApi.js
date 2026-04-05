@@ -1,4 +1,3 @@
-// ../api/patientApi.js
 import api from './api';
 
 export const patientApiService = {
@@ -49,17 +48,14 @@ export const patientApiService = {
     },
 
     getHospitalStructure: async () => {
-        const response = await api.get('/hospital/structure/'); // Use the URL from your hospital_app/urls.py
+        const response = await api.get('/hospital/structure/');
         return response.data;
     },
 
-    // --- New API function for assigning patient to a bed ---
     assignPatientToBed: async (patientId, bedId) => {
         const response = await api.post(`/hospital/patients/${patientId}/assign-bed/`, {
-            bed_id: bedId
+            bed_id: bedId,
         });
-        return response.data; // This should return the updated patient detail
-    }
-
-
+        return response.data;
+    },
 };

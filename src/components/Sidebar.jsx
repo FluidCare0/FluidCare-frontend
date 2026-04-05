@@ -1,16 +1,29 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Droplets, Home, Users, PlusCircle, UserCog, History, Send, LogOut, ChevronLeft, ChevronRight, X, User } from 'lucide-react';
 import NavButton from './NavButton';
 
-const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, onLogout }) => {
+const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, role, onLogout, isMobileOpen, onCloseMobile }) => {
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const navigationItems = [
-        { id: 'home', label: 'Home', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z' },
-        { id: 'patient-list', label: 'Patient list', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z' },
-        { id: 'add-ward', label: 'Add Ward', icon: 'M12 6v6m0 0v6m0-6h6m-6 0H6' },
-        { id: 'analytics', label: 'Analytics', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-        { id: 'manage-staff', label: 'Manage Staff', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z' },
-    ];
+
+    const navigationItems = useMemo(() => {
+        const items = [
+            { id: 'home', label: 'Home', icon: Home },
+            { id: 'patient-list', label: 'Patient List', icon: Users },
+            { id: 'add-ward', label: 'Add Ward', icon: PlusCircle },
+            { id: 'manage-staff', label: 'Manage Staff', icon: UserCog },
+            { id: 'history', label: 'History', icon: History },
+            { id: 'profile', label: 'My Profile', icon: User },
+        ];
+        if (role === 'root_admin' || role === 'manager') {
+            items.push({
+                id: 'send-notification',
+                label: 'Send Notification',
+                icon: Send
+            });
+        }
+        return items;
+    }, [role]);
 
     const handleLogoutClick = () => {
         setShowLogoutConfirm(true);
@@ -27,47 +40,67 @@ const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, onLog
 
     return (
         <>
+            {/* Mobile Backdrop */}
+            {isMobileOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity backdrop-blur-sm"
+                    onClick={onCloseMobile}
+                />
+            )}
+
             {/* Main Sidebar */}
-            <div className={`bg-white border-r border-gray-200 flex flex-col shadow-sm transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-80'}`}>
-                {/* Hospital Header */}
-                <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+            <div className={`
+                fixed inset-y-0 left-0 z-40 transform md:relative md:translate-x-0 h-screen bg-white border-r border-gray-200 flex flex-col shadow-2xl md:shadow-none transition-all duration-300 ease-in-out
+                ${isCollapsed ? 'w-20' : 'w-full max-w-[320px] sm:w-80'}
+                ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
+            `}>
+                {/* Desktop Header */}
+                <div className="hidden md:block p-6 border-b border-gray-100">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center border-2 border-blue-300">
-                                <span className="text-sm font-semibold text-blue-600">{username}</span>
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 shadow-lg shadow-blue-200">
+                                <Droplets className="text-white" size={22} strokeWidth={2.5} />
                             </div>
                             {!isCollapsed && (
-                                <h1 className="text-xl font-bold text-blue-600">{hospitalName}</h1>
+                                <h1 className="text-xl font-extrabold tracking-tight text-slate-900 truncate">
+                                    fluid<span className="text-blue-600">Care</span>
+                                </h1>
                             )}
                         </div>
                         <button
                             onClick={() => setIsCollapsed(!isCollapsed)}
-                            className="p-1 rounded-lg hover:bg-gray-100"
+                            className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-colors"
                         >
-                            <svg
-                                className="w-5 h-5 text-gray-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                                />
-                            </svg>
+                            {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
                         </button>
                     </div>
                 </div>
 
+                {/* Mobile Header */}
+                <div className="md:hidden p-4 border-b border-gray-200 bg-slate-50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 shadow-md">
+                            <Droplets className="text-white" size={18} strokeWidth={2.5} />
+                        </div>
+                        <h1 className="text-lg font-bold text-slate-900">
+                            fluid<span className="text-blue-600">Care</span>
+                        </h1>
+                    </div>
+                    <button onClick={onCloseMobile} className="p-2 text-slate-500 hover:text-slate-900">
+                        <X size={24} />
+                    </button>
+                </div>
+
                 {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-2">
+                <nav className="flex-1 px-3 py-6 space-y-1.5 overflow-y-auto custom-scrollbar">
                     {navigationItems.map((item) => (
                         <NavButton
                             key={item.id}
                             active={activeSection === item.id}
-                            onClick={() => onSectionChange(item.id)}
+                            onClick={() => {
+                                onSectionChange(item.id);
+                                if (isMobileOpen) onCloseMobile();
+                            }}
                             isCollapsed={isCollapsed}
                             icon={item.icon}
                         >
@@ -76,36 +109,34 @@ const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, onLog
                     ))}
                 </nav>
 
-                {/* Logout Button at the bottom */}
-                <div className="p-4 border-t border-gray-200">
+                {/* Footer Section */}
+                <div className="p-4 border-t border-gray-100 bg-slate-50/50">
                     <button
                         onClick={handleLogoutClick}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg bg-white hover:bg-red-50 transition-colors border border-gray-200 text-red-600 ${isCollapsed ? 'justify-center' : ''}`}
+                        className={`w-full flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-red-600 shadow-sm transition-all hover:border-red-100 hover:bg-red-50 hover:shadow-md ${isCollapsed ? 'justify-center p-3' : ''}`}
                     >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        {!isCollapsed && <span className="font-medium">Logout</span>}
+                        <LogOut size={22} strokeWidth={2} />
+                        {!isCollapsed && <span className="font-bold text-sm">Logout</span>}
                     </button>
                 </div>
             </div>
 
-            {/* Confirmation Modal */}
+            {/* Logout Confirmation */}
             {showLogoutConfirm && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-96">
-                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Confirm Logout</h3>
-                        <p className="text-gray-600 mb-6">Are you sure you want to logout?</p>
-                        <div className="flex justify-end gap-3">
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+                    <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 transform transition-all animate-in fade-in zoom-in duration-200">
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">Confirm Logout</h3>
+                        <p className="text-slate-500 mb-8">Are you sure you want to end your session?</p>
+                        <div className="flex gap-3">
                             <button
                                 onClick={cancelLogout}
-                                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                                className="flex-1 bg-slate-100 px-4 py-3 rounded-xl text-slate-700 font-bold hover:bg-slate-200 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 onClick={confirmLogout}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                className="flex-1 bg-red-600 px-4 py-3 rounded-xl text-white font-bold hover:bg-red-700 shadow-lg shadow-red-200 transition-colors"
                             >
                                 Logout
                             </button>

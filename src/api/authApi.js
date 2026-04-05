@@ -14,6 +14,9 @@ export const login = async (credentials) => {
     }
 };
 
+/**
+ * Logout user and clear tokens
+ */
 export const logout = async () => {
     try {
         await apiClient.post('auth/logout/');
@@ -27,7 +30,9 @@ export const logout = async () => {
     }
 };
 
-
+/**
+ * Refresh tokens
+ */
 export const refresh = async (refreshToken) => {
     try {
         const response = await apiClient.post('auth/refresh/', {
@@ -40,7 +45,9 @@ export const refresh = async (refreshToken) => {
     }
 };
 
-
+/**
+ * Verify token
+ */
 export const verify = async (token) => {
     try {
         const response = await apiClient.post('auth/verify/', {

@@ -16,7 +16,6 @@ const processQueue = (error, token = null) => {
             prom.resolve(token);
         }
     });
-
     failedQueue = [];
 };
 
@@ -34,12 +33,14 @@ staffApi.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error.config;
-
         if (error.response?.status === 401 && !originalRequest._retry) {
             if (isRefreshing) {
                 // If already refreshing, queue this request
                 return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
+                    failedQueue.push({
+                        resolve,
+                        reject
+                    });
                 }).then(token => {
                     originalRequest.headers['Authorization'] = `Bearer ${token}`;
                     return staffApi(originalRequest);
@@ -47,47 +48,36 @@ staffApi.interceptors.response.use(
                     return Promise.reject(err);
                 });
             }
-
             originalRequest._retry = true;
             isRefreshing = true;
-
             try {
                 const res = await axios.post(
-                    'http://localhost:8000/api/auth/refresh/',
-                    {},
-                    { withCredentials: true }
+                    'http://localhost:8000/api/auth/refresh/', {}, {
+                    withCredentials: true
+                }
                 );
-
                 const newAccess = res.data.access;
                 localStorage.setItem('access', newAccess);
-
                 // Process queued requests
                 processQueue(null, newAccess);
-
                 // Retry original request
                 originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
                 return staffApi(originalRequest);
-
             } catch (refreshError) {
                 console.error('Token refresh failed:', refreshError);
-
                 // Process queued requests with error
                 processQueue(refreshError, null);
-
                 // Clear storage and redirect to login
                 localStorage.removeItem('access');
-
                 // Only redirect if not already on login page
                 if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
                     window.location.href = '/';
                 }
-
                 return Promise.reject(refreshError);
             } finally {
                 isRefreshing = false;
             }
         }
-
         return Promise.reject(error);
     }
 );
@@ -100,25 +90,20 @@ export const staffApiService = {
         if (filters.role) params.append('role', filters.role);
         if (filters.status) params.append('status', filters.status);
         if (filters.search) params.append('search', filters.search);
-
         return staffApi.get(`/users/?${params.toString()}`);
     },
-
     // Create a new staff member
     createStaff: (staffData) => {
         return staffApi.post('/users/create/', staffData);
     },
-
     // Get specific staff member
     getStaffById: (id) => {
         return staffApi.get(`/users/${id}/`);
     },
-
     // Update staff member
     updateStaff: (id, staffData) => {
         return staffApi.put(`/users/${id}/update/`, staffData);
     },
-
     // Delete staff member
     deleteStaff: (id) => {
         return staffApi.delete(`/users/${id}/delete/`);

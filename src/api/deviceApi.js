@@ -6,17 +6,14 @@ import apiClient from './api';
  */
 export const getAllDevices = async () => {
     try {
-        const response = await apiClient.get('sensor/devices/'); // This now filters out removed devices
+        const response = await apiClient.get('sensor/devices/');
+        // This now filters out removed devices
         return response.data;
     } catch (error) {
         console.error('Error fetching devices:', error);
         throw error;
     }
 };
-
-/**
- * Get sensor reading history for a device
- */
 
 /**
  * Register a new device
@@ -31,23 +28,6 @@ export const registerDevice = async (deviceData) => {
     }
 };
 
-/**
- * Remove a device from the dashboard by ID.
- * This sends an MQTT command to the device and sets a flag on the device so it's no longer returned by getAllDevices.
- */
-export const removeDeviceFromDashboard = async (deviceId) => {
-    try {
-        // Example: POST request to remove from dashboard
-        // Replace 'remove-from-dashboard' with your actual endpoint path
-        // e.g., /api/sensor/devices/{deviceId}/remove-from-dashboard/
-        const response = await apiClient.post(`sensor/devices/${deviceId}/remove-from-dashboard/`); // Or PUT /devices/{deviceId}/
-        return response.data;
-    } catch (error) {
-        console.error(`Error removing device ${deviceId} from dashboard:`, error);
-        throw error;
-    }
-};
-
 // --- NEW FUNCTIONS FOR DEVICE INFO PAGE ---
 
 /**
@@ -55,7 +35,7 @@ export const removeDeviceFromDashboard = async (deviceId) => {
  */
 export const getPatientDetailsByDevice = async (deviceId) => {
     try {
-        const response = await apiClient.get(`/sensor/devices/${deviceId}/patient-details/`);
+        const response = await apiClient.get(`sensor/devices/${deviceId}/patient-details/`);
         return response.data;
     } catch (error) {
         console.error(`Error fetching patient details for device ${deviceId}:`, error);
@@ -68,7 +48,7 @@ export const getPatientDetailsByDevice = async (deviceId) => {
  */
 export const getPatientAssignmentHistoryByDevice = async (deviceId) => {
     try {
-        const response = await apiClient.get(`/sensor/devices/${deviceId}/patient-history/`);
+        const response = await apiClient.get(`sensor/devices/${deviceId}/patient-history/`);
         return response.data;
     } catch (error) {
         console.error(`Error fetching patient assignment history for device ${deviceId}:`, error);
@@ -81,10 +61,25 @@ export const getPatientAssignmentHistoryByDevice = async (deviceId) => {
  */
 export const getDeviceAssignmentHistory = async (deviceId) => {
     try {
-        const response = await apiClient.get(`/sensor/devices/${deviceId}/device-history/`);
+        const response = await apiClient.get(`sensor/devices/${deviceId}/device-history/`);
         return response.data;
     } catch (error) {
         console.error(`Error fetching device assignment history for device ${deviceId}:`, error);
+        throw error;
+    }
+};
+
+/**
+ * Fetch sensor reading history for a device.
+ */
+export const getSensorHistory = async (deviceId, hours = 24) => {
+    try {
+        const response = await apiClient.get(`sensor/devices/${deviceId}/history/`, {
+            params: { hours }
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching sensor history for device ${deviceId}:`, error);
         throw error;
     }
 };

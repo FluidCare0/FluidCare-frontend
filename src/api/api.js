@@ -39,11 +39,13 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
+          failedQueue.push({
+            resolve,
+            reject
+          });
         }).then(token => {
           originalRequest.headers['Authorization'] = `Bearer ${token}`;
           return apiClient(originalRequest);
@@ -55,33 +57,27 @@ apiClient.interceptors.response.use(
 
       try {
         const res = await axios.post(
-          `${API_BASE_URL}/api/auth/refresh/`,
-          {},
-          { withCredentials: true }
+          `${API_BASE_URL}/api/auth/refresh/`, {}, {
+          withCredentials: true
+        }
         );
-
         const newAccess = res.data.access;
         localStorage.setItem('access', newAccess);
-
         processQueue(null, newAccess);
-
         originalRequest.headers['Authorization'] = `Bearer ${newAccess}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         processQueue(refreshError, null);
         localStorage.removeItem('access');
-
         if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
           window.location.href = '/';
         }
-
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
     }
-
     return Promise.reject(error);
   }
 );

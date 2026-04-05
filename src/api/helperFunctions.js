@@ -1,22 +1,6 @@
-// src/api/helperFunctions.js
-
-// ==================== HELPER FUNCTIONS ====================
-
-/**
- * Transforms backend device data for frontend use.
- * ✅ FIXED: Properly maps all fields from backend to frontend
- * @param {Object} backendDevice - Device object from the backend API.
- * @returns {Object} Transformed device object for the frontend.
- */
-/**
- * Transforms backend device data for frontend use.
- * ✅ Supports both assignment-style and flat device responses
- */
 export const transformDeviceData = (backendDevice) => {
-    // 🧠 Check if data comes from the new assignment-style response
     const isAssignmentFormat = backendDevice.device !== undefined;
 
-    // If new format (patient-device-bed assignment)
     if (isAssignmentFormat) {
         const fluidBag = backendDevice.device?.fluid_bags?.[0] || {};
 
@@ -25,34 +9,30 @@ export const transformDeviceData = (backendDevice) => {
             nodeId: backendDevice.device?.id,
             name: backendDevice.patient_name || 'Unassigned',
             macAddress: backendDevice.device?.mac_address || 'N/A',
-            status: backendDevice.device?.status ? 'active' : 'inactive',
-
-            // 💧 Fluid Info
+            status: backendDevice.device?.status || 'offline',
             fluidBag: {
                 type: fluidBag.type || 'Unknown',
                 capacity: fluidBag.capacity_ml || 0,
                 thresholdLow: fluidBag.threshold_low || 0,
                 thresholdHigh: fluidBag.threshold_high || 0,
             },
-
-            // 🏥 Location Info
             patient: backendDevice.patient_name || 'Unassigned',
             bed: backendDevice.bed_number ? `Bed ${backendDevice.bed_number}` : 'N/A',
             ward: backendDevice.ward_name || 'N/A',
-            floor: backendDevice.floor_number
-                ? `Floor ${backendDevice.floor_number}`
-                : 'N/A',
-
-            // 🕒 Meta Info
+            floor: backendDevice.floor_number ? `Floor ${backendDevice.floor_number}` : 'N/A',
             lastReading: backendDevice.start_time || null,
-            level: 0, // Real-time readings will update via WebSocket
+            level: 0,
             batteryPercent: 100,
             stopAt: backendDevice.device?.stop_at || null,
+            current_ward_number: backendDevice.ward_number || 'N/A',
+            current_ward_name: backendDevice.ward_name || 'Unassigned',
+            current_bed_number: backendDevice.bed_number || 'N/A',
+            current_patient: backendDevice.patient_name || 'No Patient',
         };
     }
 
-    // If old format (flat device list)
-    let status = backendDevice.status || 'offline';
+    const status = backendDevice.status || 'offline';
+
     return {
         id: backendDevice.id,
         nodeId: backendDevice.nodeId || backendDevice.id,
@@ -63,12 +43,14 @@ export const transformDeviceData = (backendDevice) => {
         roomNo: backendDevice.current_bed_number || 'N/A',
         patient: backendDevice.current_patient || 'No Patient',
         status,
-        fluidBag: backendDevice.fluidBag ? {
-            type: backendDevice.fluidBag.type,
-            capacity: backendDevice.fluidBag.capacity_ml,
-            thresholdLow: backendDevice.fluidBag.threshold_low,
-            thresholdHigh: backendDevice.fluidBag.threshold_high
-        } : null,
+        fluidBag: backendDevice.fluidBag
+            ? {
+                  type: backendDevice.fluidBag.type,
+                  capacity: backendDevice.fluidBag.capacity_ml,
+                  thresholdLow: backendDevice.fluidBag.threshold_low,
+                  thresholdHigh: backendDevice.fluidBag.threshold_high,
+              }
+            : null,
         level: backendDevice.level || 0,
         lastReading: backendDevice.lastReading || null,
         batteryPercent: backendDevice.batteryPercent || null,
@@ -80,79 +62,76 @@ export const transformDeviceData = (backendDevice) => {
     };
 };
 
-
 export const processSensorData = (sensorData) => {
     return {
-        nodeId: sensorData.nodeId, // ✅ UUID from WebSocket
+        nodeId: sensorData.nodeId,
         nodeMac: sensorData.nodeMac,
-        reading: sensorData.level, // ✅ Current reading level
+        reading: sensorData.level,
         batteryPercent: sensorData.batteryPercent,
         timestamp: sensorData.timestamp ? new Date(sensorData.timestamp) : new Date(),
-        status: sensorData.status || 'active', // ✅ Status from WebSocket (defaults to active)
+        status: sensorData.status || 'active',
     };
 };
 
-/**
- * Calculates the alert status based on the current reading and thresholds.
- * @param {number} reading - Current sensor reading level.
- * @param {Object} fluidBag - Fluid bag object containing thresholds.
- * @returns {string} Alert status ('critical', 'warning', 'overfill', 'normal', 'unknown').
- */
 export const calculateDeviceStatus = (reading, fluidBag) => {
-    if (!fluidBag) return 'unknown';
+    if (!fluidBag) {
+        return 'unknown';
+    }
+
     const { thresholdLow, thresholdHigh } = fluidBag;
-    if (reading <= thresholdLow) return 'critical';
-    if (reading <= thresholdLow * 1.2) return 'warning';
-    if (reading >= thresholdHigh) return 'overfill';
+
+    if (reading <= thresholdLow) {
+        return 'critical';
+    }
+
+    if (reading <= thresholdLow * 1.2) {
+        return 'warning';
+    }
+
+    if (reading >= thresholdHigh) {
+        return 'overfill';
+    }
+
     return 'normal';
 };
 
-/**
- * Checks if a device is considered offline based on its status.
- * @param {string} status - Device status string.
- * @returns {boolean} True if the device is offline.
- */
 export const isDeviceOffline = (status) => {
-    if (!status) return true;
+    if (!status) {
+        return true;
+    }
+
     const statusLower = status.toLowerCase();
-    return statusLower === 'offline' ||
-        statusLower === 'inactive' ||
-        statusLower === 'deactivate';
+    return statusLower === 'offline' || statusLower === 'inactive' || statusLower === 'deactivate';
 };
 
-/**
- * Checks if a device is considered task-completed.
- * @param {string} status - Device status string.
- * @returns {boolean} True if the device is task-completed.
- */
 export const isDeviceTaskCompleted = (status) => {
-    if (!status) return false;
+    if (!status) {
+        return false;
+    }
+
     const statusLower = status.toLowerCase();
-    return statusLower === 'task_completed' ||
+    return (
+        statusLower === 'task_completed' ||
         statusLower === 'task completed' ||
-        statusLower === 'inactive';
+        statusLower === 'completed' ||
+        statusLower === 'inactive'
+    );
 };
 
-/**
- * Checks if a device is active/online.
- * @param {string} status - Device status string.
- * @returns {boolean} True if the device is active.
- */
 export const isDeviceActive = (status) => {
-    if (!status) return false;
+    if (!status) {
+        return false;
+    }
+
     const statusLower = status.toLowerCase();
-    return statusLower === 'activate' ||
-        statusLower === 'active' ||
-        statusLower === 'online';
+    return statusLower === 'activate' || statusLower === 'active' || statusLower === 'online';
 };
 
-/**
- * Get human-readable status display text.
- * @param {string} status - Device status string.
- * @returns {string} Formatted status text for display.
- */
 export const getStatusDisplayText = (status) => {
-    if (!status) return 'Unknown';
+    if (!status) {
+        return 'Unknown';
+    }
+
     const statusLower = status.toLowerCase();
 
     switch (statusLower) {

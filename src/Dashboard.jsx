@@ -2,49 +2,6 @@ import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import HomePage from './pages/HomePage';
 import PatientListPage from './pages/PatientListPage';
-import AddWardPage from './pages/AddWardPage';
-import AnalyticsPage from './pages/AnalyticsPage';
-import ManageStaffPage from './pages/ManageStaffPage';
-import HistoryPage from './pages/HistoryPage';
-
-const Dashboard = () => {
-    const [activeSection, setActiveSection] = useState('home');
-
-    const renderContent = () => {
-        switch (activeSection) {
-            case 'home':
-                return <HomePage />;
-            case 'patient-list':
-                return <PatientListPage />;
-            case 'add-ward':
-                return <AddWardPage />;
-            case 'analytics':
-                return <AnalyticsPage />;
-            case 'manage-staff':
-                return <ManageStaffPage />;
-            case 'history':
-                return <HistoryPage />;
-            default:
-                return <HomePage />;
-        }
-    };
-
-    return (
-        <div className="flex h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100">
-            {/* Sidebar */}
-            <Sidebar
-                activeSection={activeSection}
-                onSectionChange={setActiveSection}
-                hospitalName="fluidCare"
-                username="U"
-            />
-
-            {/* Main Content */}
-            <div className="flex-1 overflow-auto">
-                {renderContent()}
-            </div>
-        </div>
-    );
-};
-
-export default Dashboard;
+import AddWardPage from './pages/AddWardPage'; import ManageStaffPage from './pages/ManageStaffPage';
+import HistoryPage from './pages/HistoryPage'; const Dashboard = () => { const [activeSection, setActiveSection] = useState('home'); const [isSidebarOpen, setIsSidebarOpen] = useState(false); const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen); const renderContent = () => { switch (activeSection) { case 'home': return <HomePage />; case 'patient-list': return <PatientListPage />; case 'add-ward': return <AddWardPage />; case 'manage-staff': return <ManageStaffPage />; case 'history': return <HistoryPage />; default: return <HomePage />; } }; return ( <div className="flex flex-col md:flex-row h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 overflow-hidden"> {/* Mobile Header */} <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 sticky top-0 z-40"> <div className="flex items-center gap-3"> <div className="w-8 h-8 bg-blue-100 flex items-center justify-center border border-blue-300"> <span className="text-xs font-semibold text-blue-600">U</span> </div> <h1 className="text-lg font-bold text-blue-600">fluidCare</h1> </div> <button onClick={toggleSidebar} className="p-2 hover:bg-gray-100 text-gray-600" aria-label="Toggle Menu" > <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isSidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} /> </svg> </button> </div> {/* Sidebar Overlay for Mobile */} {isSidebarOpen && ( <div className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm transition-opacity" onClick={() => setIsSidebarOpen(false)} /> )} {/* Sidebar */} <div className={` fixed inset-y-0 left-0 z-50 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out md:flex md:flex-col `}> <Sidebar activeSection={activeSection} onSectionChange={(section) => { setActiveSection(section); setIsSidebarOpen(false); }} hospitalName="fluidCare" username="U" /> </div> {/* Main Content */} <div className="flex-1 overflow-auto relative"> {renderContent()} </div> </div> );
+}; export default Dashboard;

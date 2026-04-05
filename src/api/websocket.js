@@ -18,7 +18,9 @@ class SensorWebSocket {
         // Check connection state and prevent multiple attempts
         if (this.ws?.readyState === WebSocket.OPEN) {
             console.log('WebSocket is already connected');
-            this.notifyListeners('connection', { status: 'connected' });
+            this.notifyListeners('connection', {
+                status: 'connected'
+            });
             return;
         }
         if (this.ws?.readyState === WebSocket.CONNECTING || this.isConnecting) {
@@ -31,7 +33,6 @@ class SensorWebSocket {
             this.connectAbortController.abort();
         }
         this.connectAbortController = new AbortController();
-
         this.isConnecting = true;
         this.shouldReconnect = true;
 
@@ -43,14 +44,12 @@ class SensorWebSocket {
         }
 
         const wsUrl = `${WS_BASE_URL}/ws/sensors/?token=${token}`;
-
         try {
             if (this.connectAbortController.signal.aborted) {
                 console.log("Connection attempt aborted before WebSocket creation.");
                 this.isConnecting = false;
                 return;
             }
-
             this.ws = new WebSocket(wsUrl);
 
             // Listen for abort signal
@@ -67,7 +66,9 @@ class SensorWebSocket {
                 this.isConnecting = false;
                 this.reconnectAttempts = 0;
                 this.connectAbortController = null;
-                this.notifyListeners('connection', { status: 'connected' });
+                this.notifyListeners('connection', {
+                    status: 'connected'
+                });
             };
 
             this.ws.onmessage = (event) => {
@@ -88,14 +89,17 @@ class SensorWebSocket {
                 this.isConnecting = false;
                 this.ws = null;
                 this.connectAbortController = null;
-
                 let status = 'disconnected';
                 if (event.code === 1000) {
                     status = 'closed';
                 } else if (event.code === 1006) {
                     status = 'failed';
                 }
-                this.notifyListeners('connection', { status, code: event.code, reason: event.reason });
+                this.notifyListeners('connection', {
+                    status,
+                    code: event.code,
+                    reason: event.reason
+                });
 
                 // Only reconnect if we should and haven't exceeded max attempts
                 if (this.shouldReconnect && status !== 'closed' && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -106,8 +110,10 @@ class SensorWebSocket {
             console.error('Failed to create WebSocket instance:', error);
             this.isConnecting = false;
             this.connectAbortController = null;
-            this.notifyListeners('connection', { status: 'failed', message: 'Failed to initialize WebSocket connection.' });
-
+            this.notifyListeners('connection', {
+                status: 'failed',
+                message: 'Failed to initialize WebSocket connection.'
+            });
             if (this.shouldReconnect) {
                 this.handleReconnect();
             }
@@ -115,8 +121,10 @@ class SensorWebSocket {
     }
 
     handleMessage(data) {
-        const { type, message } = data;
-
+        const {
+            type,
+            message
+        } = data;
         switch (type) {
             case 'connection_established':
                 console.log('Connection established message received:', message);
@@ -132,16 +140,30 @@ class SensorWebSocket {
                 console.log('📩 Node ID request received from MAC:', data.mac);
                 this.notifyListeners('node_id_request', data);
                 break;
+            case 'initial_data':
+                console.log('🏠 Received initial data from WebSocket:', data.data);
+                this.notifyListeners('initial_data', data.data);
+                break;
+            case 'new_notification':
+                console.log('🔔 Received new notification from WebSocket:', data.notification);
+                this.notifyListeners('new_notification', data);
+                break;
+            case 'refresh_notifications':
+                console.log('🔄 Received genuine refresh request from WebSocket');
+                this.notifyListeners('refresh_notifications', data);
+                break;
             default:
                 console.log('Unknown message type:', type);
                 this.notifyListeners('message', data);
         }
     }
 
-
     subscribeToFloor(floorNumber) {
         if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'subscribe_floor', floor: floorNumber }));
+            this.ws.send(JSON.stringify({
+                type: 'subscribe_floor',
+                floor: floorNumber
+            }));
         } else {
             console.error('WebSocket is not connected');
         }
@@ -149,7 +171,10 @@ class SensorWebSocket {
 
     unsubscribeFromFloor(floorNumber) {
         if (this.ws?.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: 'unsubscribe_floor', floor: floorNumber }));
+            this.ws.send(JSON.stringify({
+                type: 'unsubscribe_floor',
+                floor: floorNumber
+            }));
         }
     }
 
@@ -157,7 +182,11 @@ class SensorWebSocket {
         if (!this.listeners.has(eventType)) {
             this.listeners.set(eventType, []);
         }
-        this.listeners.get(eventType).push(callback);
+        const callbacks = this.listeners.get(eventType);
+        // Prevent the same callback from being registered more than once
+        if (!callbacks.includes(callback)) {
+            callbacks.push(callback);
+        }
     }
 
     off(eventType, callback) {
@@ -199,25 +228,25 @@ class SensorWebSocket {
     disconnect() {
         console.log("Disconnect called on SensorWebSocket");
         this.shouldReconnect = false;
-
         // Abort any pending connection attempt
         if (this.connectAbortController) {
             console.log("Aborting pending connection attempt.");
             this.connectAbortController.abort();
             this.connectAbortController = null;
         }
-
         // Reset the connecting flag immediately to allow future connections
         this.isConnecting = false;
-
         if (this.ws) {
             const currentWs = this.ws;
             this.ws = null; // Clear reference immediately
-
             // Set a temporary onclose to avoid triggering handleReconnect
             currentWs.onclose = (event) => {
                 console.log('Explicitly closed WebSocket:', event.code, event.reason);
-                this.notifyListeners('connection', { status: 'closed', code: event.code, reason: event.reason });
+                this.notifyListeners('connection', {
+                    status: 'closed',
+                    code: event.code,
+                    reason: event.reason
+                });
             };
             currentWs.close(1000, "Client disconnected");
         } else {

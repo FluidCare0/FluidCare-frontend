@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities;
+@tailwind utilities; @layer base { html { -webkit-tap-highlight-color: transparent; scroll-behavior: smooth; font-feature-settings: "cv02", "cv03", "cv04", "cv11"; } body { @apply antialiased text-gray-900 bg-gray-50; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overflow-x: hidden; } /* Custom scrollbar for a premium look */ ::-webkit-scrollbar { width: 6px; height: 6px; } ::-webkit-scrollbar-track { @apply bg-transparent; } ::-webkit-scrollbar-thumb { @apply bg-gray-300 hover:bg-gray-400 transition-colors; } /* Focus rings for accessibility but not on click for mouse users */ :focus-visible { @apply outline-none ring-2 ring-blue-500 ring-offset-2; } *, *::before, *::after { border-radius: 0 !important; box-sizing: border-box; }
+} @layer components { .glass-effect { @apply bg-white/70 backdrop-blur-md border border-white/20; } .card-hover { @apply transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/5 hover:-translate-y-1; }
+} /* Fix for Safari long-press callout */
+* { -webkit-touch-callout: none;
+} input, textarea { -webkit-touch-callout: default;
+} #root { min-height: 100vh;
+}
