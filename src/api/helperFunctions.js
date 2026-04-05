@@ -67,6 +67,7 @@ export const processSensorData = (sensorData) => {
         nodeId: sensorData.nodeId,
         nodeMac: sensorData.nodeMac,
         reading: sensorData.level,
+        smoothedWeight: sensorData.smoothedWeight ?? null,
         batteryPercent: sensorData.batteryPercent,
         timestamp: sensorData.timestamp ? new Date(sensorData.timestamp) : new Date(),
         status: sensorData.status || 'active',

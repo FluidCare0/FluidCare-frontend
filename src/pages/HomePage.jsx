@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import DeviceCard from '../components/DeviceCard';
 import Card from '../components/Card';
 import { getAllDevices } from '../api/deviceApi';
-import { transformDeviceData } from '../api/helperFunctions';
+import { transformDeviceData, processSensorData, calculateDeviceStatus } from '../api/helperFunctions';
 import WebSocketStatus from '../components/WebSocketStatus';
+import { useSensorWebSocket } from '../hooks/useSensorWebSocket';
 
 const HomePage = () => {
     const [devices, setDevices] = useState([]);
@@ -38,6 +39,33 @@ const HomePage = () => {
     useEffect(() => {
         localStorage.setItem('deviceViewMode', viewMode);
     }, [viewMode]);
+
+    // Handle live sensor data from WebSocket
+    const handleSensorData = useCallback((data) => {
+        const processed = processSensorData(data.message || data);
+        setDevices((prev) =>
+            prev.map((device) => {
+                if (device.id !== processed.nodeId) return device;
+                const updated = {
+                    ...device,
+                    level: Math.round(processed.reading),
+                    smoothedWeight: processed.smoothedWeight,
+                    lastReading: processed.timestamp,
+                    status: processed.status || device.status,
+                    batteryPercent: processed.batteryPercent,
+                };
+                if (updated.fluidBag) {
+                    updated.alertStatus = calculateDeviceStatus(
+                        updated.smoothedWeight ?? updated.level,
+                        updated.fluidBag
+                    );
+                }
+                return updated;
+            })
+        );
+    }, []);
+
+    useSensorWebSocket({ onSensorData: handleSensorData });
 
     const uniqueWards = useMemo(() => {
         return [...new Set(devices.map((device) => device.ward).filter(Boolean))];
@@ -257,9 +285,17 @@ const HomePage = () => {
                                 </p>
                             </Card>
                             <Card className="p-4">
-                                <p className="text-sm text-gray-500">Fluid Level</p>
+                                <p className="text-sm text-gray-500">Fluid Level (raw)</p>
                                 <p className="mt-1 text-lg font-semibold text-gray-900">
                                     {selectedDevice.level ?? 0}%
+                                </p>
+                            </Card>
+                            <Card className="p-4">
+                                <p className="text-sm text-gray-500">Smoothed Weight</p>
+                                <p className="mt-1 text-lg font-semibold text-blue-700">
+                                    {selectedDevice.smoothedWeight != null
+                                        ? `${selectedDevice.smoothedWeight.toFixed(1)} g`
+                                        : 'N/A'}
                                 </p>
                             </Card>
                             <Card className="p-4">
