@@ -1,6 +1,104 @@
-// src/hooks/useSensorWebSocket.js
 import { useEffect, useCallback, useRef } from 'react';
-import { sensorWebSocket } from '../api/api'; /** * Custom hook for managing sensor WebSocket connections * @param {Object} options - Configuration options * @param {Function} options.onSensorData - Callback for sensor data * @param {Function} options.onConnectionChange - Callback for connection status changes * @param {Function} options.onError - Callback for errors * @param {boolean} options.autoConnect - Auto-connect on mount (default: true) * @returns {Object} WebSocket control methods */
-export const useSensorWebSocket = ({ onSensorData, onConnectionChange, onError, autoConnect = true
-} = {}) => { const handlersRef = useRef({ onSensorData, onConnectionChange, onError }); // Update handlers ref when callbacks change useEffect(() => { handlersRef.current = { onSensorData, onConnectionChange, onError }; }, [onSensorData, onConnectionChange, onError]); // Sensor data handler const handleSensorData = useCallback((data) => { if (handlersRef.current.onSensorData) { handlersRef.current.onSensorData(data); } }, []); // Connection status handler const handleConnectionStatus = useCallback((data) => { if (handlersRef.current.onConnectionChange) { handlersRef.current.onConnectionChange(data); } }, []); // Error handler const handleError = useCallback((data) => { if (handlersRef.current.onError) { handlersRef.current.onError(data); } }, []); // Subscribe to floor const subscribeToFloor = useCallback((floorNumber) => { sensorWebSocket.subscribeToFloor(floorNumber); }, []); // Unsubscribe from floor const unsubscribeFromFloor = useCallback((floorNumber) => { sensorWebSocket.unsubscribeFromFloor(floorNumber); }, []); // Connect to WebSocket const connect = useCallback(() => { sensorWebSocket.connect(); }, []); // Disconnect from WebSocket const disconnect = useCallback(() => { sensorWebSocket.disconnect(); }, []); // Check connection status const isConnected = useCallback(() => { return sensorWebSocket.isConnected(); }, []); // Setup WebSocket listeners useEffect(() => { sensorWebSocket.on('sensor_data', handleSensorData); sensorWebSocket.on('connection', handleConnectionStatus); sensorWebSocket.on('error', handleError); if (autoConnect) { sensorWebSocket.connect(); } return () => { sensorWebSocket.off('sensor_data', handleSensorData); sensorWebSocket.off('connection', handleConnectionStatus); sensorWebSocket.off('error', handleError); }; }, [autoConnect, handleSensorData, handleConnectionStatus, handleError]); return { connect, disconnect, isConnected, subscribeToFloor, unsubscribeFromFloor };
-}; export default useSensorWebSocket;
+import { sensorWebSocket } from '../api/websocket';
+
+export const useSensorWebSocket = ({
+  onSensorData,
+  onConnectionChange,
+  onError,
+  onNodeRequest,
+  onDevicesRefresh,   // ← NEW
+  autoConnect = true,
+} = {}) => {
+  const handlersRef = useRef({
+    onSensorData,
+    onConnectionChange,
+    onError,
+    onNodeRequest,
+    onDevicesRefresh,  // ← NEW
+  });
+
+  useEffect(() => {
+    handlersRef.current = {
+      onSensorData,
+      onConnectionChange,
+      onError,
+      onNodeRequest,
+      onDevicesRefresh,
+    };
+  }, [onSensorData, onConnectionChange, onError, onNodeRequest, onDevicesRefresh]);
+
+  const handleNodeRequest = useCallback((data) => {
+    handlersRef.current.onNodeRequest?.(data);
+  }, []);
+
+  const handleSensorData = useCallback((data) => {
+    handlersRef.current.onSensorData?.(data);
+  }, []);
+
+  const handleConnectionStatus = useCallback((data) => {
+    handlersRef.current.onConnectionChange?.(data);
+  }, []);
+
+  const handleError = useCallback((data) => {
+    handlersRef.current.onError?.(data);
+  }, []);
+
+  const handleDevicesRefresh = useCallback((data) => {
+    handlersRef.current.onDevicesRefresh?.(data);
+  }, []);
+
+  const subscribeToFloor = useCallback((floorNumber) => {
+    sensorWebSocket.subscribeToFloor(floorNumber);
+  }, []);
+
+  const unsubscribeFromFloor = useCallback((floorNumber) => {
+    sensorWebSocket.unsubscribeFromFloor(floorNumber);
+  }, []);
+
+  const connect = useCallback(() => {
+    sensorWebSocket.connect();
+  }, []);
+
+  const disconnect = useCallback(() => {
+    sensorWebSocket.disconnect();
+  }, []);
+
+  const isConnected = useCallback(() => sensorWebSocket.isConnected(), []);
+
+  useEffect(() => {
+    sensorWebSocket.on('sensor_data', handleSensorData);
+    sensorWebSocket.on('connection', handleConnectionStatus);
+    sensorWebSocket.on('node_id_request', handleNodeRequest);
+    sensorWebSocket.on('refresh_devices', handleDevicesRefresh);  // ← NEW
+    sensorWebSocket.on('error', handleError);
+
+    if (autoConnect) {
+      sensorWebSocket.connect();
+    }
+
+    return () => {
+      sensorWebSocket.off('sensor_data', handleSensorData);
+      sensorWebSocket.off('connection', handleConnectionStatus);
+      sensorWebSocket.off('node_id_request', handleNodeRequest);
+      sensorWebSocket.off('refresh_devices', handleDevicesRefresh);  // ← NEW
+      sensorWebSocket.off('error', handleError);
+    };
+  }, [
+    autoConnect,
+    handleSensorData,
+    handleConnectionStatus,
+    handleError,
+    handleNodeRequest,
+    handleDevicesRefresh,
+  ]);
+
+  return {
+    connect,
+    disconnect,
+    isConnected,
+    subscribeToFloor,
+    unsubscribeFromFloor,
+  };
+};
+
+export default useSensorWebSocket;

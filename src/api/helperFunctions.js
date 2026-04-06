@@ -45,11 +45,11 @@ export const transformDeviceData = (backendDevice) => {
         status,
         fluidBag: backendDevice.fluidBag
             ? {
-                  type: backendDevice.fluidBag.type,
-                  capacity: backendDevice.fluidBag.capacity_ml,
-                  thresholdLow: backendDevice.fluidBag.threshold_low,
-                  thresholdHigh: backendDevice.fluidBag.threshold_high,
-              }
+                type: backendDevice.fluidBag.type,
+                capacity: backendDevice.fluidBag.capacity_ml,
+                thresholdLow: backendDevice.fluidBag.threshold_low,
+                thresholdHigh: backendDevice.fluidBag.threshold_high,
+            }
             : null,
         level: backendDevice.level || 0,
         lastReading: backendDevice.lastReading || null,
@@ -62,13 +62,17 @@ export const transformDeviceData = (backendDevice) => {
     };
 };
 
+// ★ FIXED: Made resilient to missing keys and snake_case vs camelCase
 export const processSensorData = (sensorData) => {
+    if (!sensorData || typeof sensorData !== 'object') return null;
+
     return {
         nodeId: sensorData.nodeId,
         nodeMac: sensorData.nodeMac,
-        reading: sensorData.level,
-        smoothedWeight: sensorData.smoothedWeight ?? null,
-        batteryPercent: sensorData.batteryPercent,
+        reading: sensorData.level ?? sensorData.reading ?? 0,
+        // Handles both camelCase from WebSocket and snake_case from backend
+        smoothedWeight: sensorData.smoothedWeight ?? sensorData.smoothed_weight ?? null,
+        batteryPercent: sensorData.batteryPercent ?? sensorData.battery_percent ?? null,
         timestamp: sensorData.timestamp ? new Date(sensorData.timestamp) : new Date(),
         status: sensorData.status || 'active',
     };
@@ -97,19 +101,13 @@ export const calculateDeviceStatus = (reading, fluidBag) => {
 };
 
 export const isDeviceOffline = (status) => {
-    if (!status) {
-        return true;
-    }
-
+    if (!status) return true;
     const statusLower = status.toLowerCase();
     return statusLower === 'offline' || statusLower === 'inactive' || statusLower === 'deactivate';
 };
 
 export const isDeviceTaskCompleted = (status) => {
-    if (!status) {
-        return false;
-    }
-
+    if (!status) return false;
     const statusLower = status.toLowerCase();
     return (
         statusLower === 'task_completed' ||
@@ -120,19 +118,13 @@ export const isDeviceTaskCompleted = (status) => {
 };
 
 export const isDeviceActive = (status) => {
-    if (!status) {
-        return false;
-    }
-
+    if (!status) return false;
     const statusLower = status.toLowerCase();
     return statusLower === 'activate' || statusLower === 'active' || statusLower === 'online';
 };
 
 export const getStatusDisplayText = (status) => {
-    if (!status) {
-        return 'Unknown';
-    }
-
+    if (!status) return 'Unknown';
     const statusLower = status.toLowerCase();
 
     switch (statusLower) {
