@@ -143,9 +143,15 @@ const NotificationSidebar = ({ isMobileOpen, onCloseMobile }) => {
     }
   };
 
-  const getSeverityBgColor = (severity) => {
-    if (severity === 'high') return 'bg-red-50 border-l-4 border-red-500';
-    if (severity === 'med') return 'bg-yellow-50 border-l-4 border-yellow-500';
+  const getSeverityBorderClass = (severity) => {
+    if (severity === 'high') return 'border-red-500';
+    if (severity === 'med') return 'border-yellow-500';
+    return 'border-transparent';
+  };
+
+  const getSeverityBgClass = (severity) => {
+    if (severity === 'high') return 'bg-red-50';
+    if (severity === 'med') return 'bg-yellow-50';
     return 'bg-white';
   };
 
@@ -156,7 +162,7 @@ const NotificationSidebar = ({ isMobileOpen, onCloseMobile }) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = notifications.filter(n => !n.is_read && n.delivery_scope !== 'global').length;
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -231,21 +237,28 @@ const NotificationSidebar = ({ isMobileOpen, onCloseMobile }) => {
                 const isNew = newNotificationIds.has(notification.id);
                 const isHighAndUnresolved =
                   notification.severity === 'high' && !notification.is_resolved;
+                const isResolvable =
+                  !notification.is_resolved &&
+                  (isHighAndUnresolved || notification.delivery_scope === 'global');
 
                 return (
                   <div
                     key={notification.id}
                     className={`
-                                            p-4 border-l-4 border-transparent
-                                            transition-all duration-200 ease-in-out cursor-pointer
+                                            p-4 border-l-4
+                                            transition-all duration-200 ease-in-out
+                                            ${getSeverityBorderClass(notification.severity)}
                                             ${!notification.is_read
                         ? 'bg-blue-50/50'
-                        : getSeverityBgColor(notification.severity)}
+                        : getSeverityBgClass(notification.severity)}
                                             ${isNew ? 'ring-2 ring-yellow-400 ring-inset' : ''}
                                             ${notification.is_resolved ? 'opacity-60 grayscale-[0.5]' : ''}
+                                            ${!notification.is_read && notification.delivery_scope !== 'global' ? 'cursor-pointer' : ''}
                                         `}
                     onClick={() =>
-                      !notification.is_read && handleMarkAsRead(notification.id)
+                      !notification.is_read &&
+                      notification.delivery_scope !== 'global' &&
+                      handleMarkAsRead(notification.id)
                     }
                   >
                     <div className="flex items-start gap-3">
@@ -284,7 +297,7 @@ const NotificationSidebar = ({ isMobileOpen, onCloseMobile }) => {
                       </div>
                     </div>
 
-                    {isHighAndUnresolved && (
+                    {isResolvable && (
                       <div className="mt-3 flex justify-end">
                         <button
                           onClick={(e) => {

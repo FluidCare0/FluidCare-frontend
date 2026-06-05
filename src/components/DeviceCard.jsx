@@ -16,15 +16,25 @@ const DeviceCard = ({ device, onShowDetails }) => {
         return typeMap[type] || 'IV Bottle';
     };
 
-    // Alert status uses smoothed weight when available, falls back to raw level
+    const capacity = device?.fluidBag?.capacity || 0;
+    // EWMA for smooth ring animation
+    const displayWeight = device?.smoothedWeight ?? device?.level ?? 0;
+    // Raw reading for instant alert response
+    const alertWeight = device?.level ?? device?.smoothedWeight ?? 0;
+    const percent = capacity > 0
+        ? Math.min(100, Math.max(0, Math.round((displayWeight / capacity) * 100)))
+        : 0;
+    const alertPercent = capacity > 0
+        ? Math.min(100, Math.max(0, Math.round((alertWeight / capacity) * 100)))
+        : 0;
+
     const getAlertStatus = () => {
         if (isOffline || isTaskCompleted) return 'offline';
-        if (!device.fluidBag) return 'unknown';
+        if (!device.fluidBag || capacity === 0) return 'unknown';
         const { thresholdLow, thresholdHigh } = device.fluidBag;
-        const alertValue = device.smoothedWeight ?? device.level ?? 0;
-        if (alertValue <= thresholdLow) return 'critical';
-        if (alertValue <= thresholdLow * 1.2) return 'warning';
-        if (alertValue >= thresholdHigh) return 'overfill';
+        if (alertPercent <= thresholdLow) return 'critical';
+        if (alertPercent <= thresholdLow * 1.2) return 'warning';
+        if (alertPercent >= thresholdHigh) return 'overfill';
         return 'normal';
     };
 
@@ -87,8 +97,7 @@ const DeviceCard = ({ device, onShowDetails }) => {
 
     const radius = 36;
     const circumference = 2 * Math.PI * radius;
-    const level = device?.level || 0;
-    const strokeDashoffset = circumference - (level / 100) * circumference;
+    const strokeDashoffset = circumference - (percent / 100) * circumference;
 
     const fluidBagType = device?.fluidBag?.type
         ? getFluidBagTypeName(device.fluidBag.type)
@@ -123,10 +132,19 @@ const DeviceCard = ({ device, onShowDetails }) => {
                         />
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center">
-                            <div className={`text-2xl font-bold ${getLevelColor(alertStatus)}`}>{level}</div>
-                            <div className="text-xs text-gray-600">%</div>
-                        </div>
+                        {(isOffline || isTaskCompleted) ? (
+                            <div className="text-center">
+                                <svg className="w-7 h-7 text-gray-400 mx-auto" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M9.172 9.172A4 4 0 0112 8c1.05 0 2.005.405 2.716 1.066M6.343 6.343A8 8 0 0112 4c2.21 0 4.21.895 5.657 2.343M1 1l2 2m18 18-2-2M12 20v-4m0 0a4 4 0 000-8" />
+                                </svg>
+                                <div className="text-xs text-gray-400 mt-0.5">{percent > 0 ? `${percent}%` : '—'}</div>
+                            </div>
+                        ) : (
+                            <div className="text-center">
+                                <div className={`text-2xl font-bold ${getLevelColor(alertStatus)}`}>{percent}</div>
+                                <div className="text-xs text-gray-600">%</div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -152,28 +170,14 @@ const DeviceCard = ({ device, onShowDetails }) => {
                     {/* Smoothed weight (EWMA) */}
                     {device?.smoothedWeight != null && (
                         <div className="text-gray-600">
-                            <span className="font-medium text-gray-700">Smoothed:</span>{' '}
+                            <span className="font-medium text-gray-700">Weight:</span>{' '}
                             <span className="font-semibold text-blue-600">
                                 {device.smoothedWeight.toFixed(1)} g
                             </span>
-                            <span className="text-xs text-gray-400 ml-1">(raw: {level})</span>
+                            <span className="text-xs text-gray-400 ml-1">(raw: {device.level ?? 0} g)</span>
                         </div>
                     )}
 
-                    {/* Battery */}
-                    {device?.batteryPercent != null && (
-                        <div className="text-gray-600 flex items-center gap-1">
-                            <span className="font-medium text-gray-700">Battery:</span>
-                            <span className={`font-semibold ${device.batteryPercent < 20 ? 'text-red-600' : 'text-gray-700'}`}>
-                                {Math.round(device.batteryPercent)}%
-                            </span>
-                            {device.batteryPercent < 20 && (
-                                <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                            )}
-                        </div>
-                    )}
 
                     {device?.lastReading && (
                         <div className="text-xs text-gray-500 mt-1">

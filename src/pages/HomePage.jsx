@@ -119,13 +119,13 @@ const HomePage = () => {
             prev.map((device) => {
                 if (device.nodeId !== processed.nodeId) return device;
 
+                const hasReading = payload.level != null || payload.reading != null;
                 const updated = {
                     ...device,
-                    level: Math.round(processed.reading),
-                    smoothedWeight: processed.smoothedWeight,
+                    level: hasReading ? Math.round(processed.reading) : device.level,
+                    smoothedWeight: processed.smoothedWeight != null ? processed.smoothedWeight : device.smoothedWeight,
                     lastReading: processed.timestamp,
                     status: processed.status || device.status,
-                    batteryPercent: processed.batteryPercent,
                 };
 
                 if (updated.fluidBag) {
@@ -281,6 +281,7 @@ const HomePage = () => {
 
     const filteredDevices = useMemo(() => {
         return devices.filter((device) => {
+            if (['completed', 'task_completed'].includes(device.status?.toLowerCase())) return false;
             const wardMatches = !wardFilter || device.ward === wardFilter;
             const statusMatches = !statusFilter || device.status === statusFilter;
             return wardMatches && statusMatches;

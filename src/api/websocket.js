@@ -152,6 +152,9 @@ class SensorWebSocket {
                 console.log('🔄 Received genuine refresh request from WebSocket');
                 this.notifyListeners('refresh_notifications', data);
                 break;
+            case 'refresh_devices':
+                this.notifyListeners('refresh_devices', data);
+                break;
             default:
                 console.log('Unknown message type:', type);
                 this.notifyListeners('message', data);
