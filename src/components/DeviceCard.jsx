@@ -17,10 +17,9 @@ const DeviceCard = ({ device, onShowDetails }) => {
     };
 
     const capacity = device?.fluidBag?.capacity || 0;
-    // EWMA for smooth ring animation
+    // EWMA for smooth ring animation and alerts — avoids false alarms from noise spikes
     const displayWeight = device?.smoothedWeight ?? device?.level ?? 0;
-    // Raw reading for instant alert response
-    const alertWeight = device?.level ?? device?.smoothedWeight ?? 0;
+    const alertWeight = device?.smoothedWeight ?? device?.level ?? 0;
     const percent = capacity > 0
         ? Math.min(100, Math.max(0, Math.round((displayWeight / capacity) * 100)))
         : 0;
