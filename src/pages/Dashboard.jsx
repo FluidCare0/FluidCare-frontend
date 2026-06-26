@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 import { sensorWebSocket } from '../api/websocket';
 
 import Sidebar from '../components/Sidebar';
-import NotificationSidebar from '../components/NotificationSidebar';
 import HomePage from './HomePage';
 import PatientListPage from './PatientListPage';
 import AddWardPage from './AddWardPage';
@@ -18,8 +17,6 @@ import 'react-toastify/dist/ReactToastify.css';
 const Dashboard = ({ role, onLogout }) => {
   const [activeSection, setActiveSection] = useState('home');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isMobileNotificationsOpen, setIsMobileNotificationsOpen] = useState(false);
-
   // Establish a single shared WebSocket connection for the whole dashboard.
   // All child components (HomePage, NotificationSidebar) share this one socket.
   useEffect(() => {
@@ -62,13 +59,7 @@ const Dashboard = ({ role, onLogout }) => {
 
         <span className="text-lg font-bold text-blue-600">fluidCare</span>
 
-        <button
-          onClick={() => setIsMobileNotificationsOpen(true)}
-          className="relative p-2 -mr-2 text-gray-600 hover:text-blue-600 focus:outline-none"
-        >
-          <Bell size={24} />
-          <span className="absolute right-2.5 top-2 h-2 w-2 bg-red-500"></span>
-        </button>
+        <div />
       </div>
 
       <Sidebar
@@ -88,11 +79,6 @@ const Dashboard = ({ role, onLogout }) => {
       <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto pt-14 md:pt-0">
         {renderContent()}
       </div>
-
-      <NotificationSidebar
-        isMobileOpen={isMobileNotificationsOpen}
-        onCloseMobile={() => setIsMobileNotificationsOpen(false)}
-      />
 
       <ToastContainer
         position="top-right"
