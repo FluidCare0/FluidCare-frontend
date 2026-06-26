@@ -1,9 +1,11 @@
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 export const refreshAccessToken = async () => {
     try {
         const res = await axios.post(
-            'http://localhost:8000/api/auth/refresh/',
+            `${API_BASE_URL}/api/auth/refresh/`,
             {},
             { withCredentials: true }
         );

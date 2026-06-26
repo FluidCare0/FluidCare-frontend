@@ -1,7 +1,9 @@
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 const staffApi = axios.create({
-    baseURL: 'http://localhost:8000/api/auth/',
+    baseURL: `${API_BASE_URL}/api/auth/`,
     withCredentials: true,
 });
 
@@ -52,7 +54,7 @@ staffApi.interceptors.response.use(
             isRefreshing = true;
             try {
                 const res = await axios.post(
-                    'http://localhost:8000/api/auth/refresh/', {}, {
+                    `${API_BASE_URL}/api/auth/refresh/`, {}, {
                     withCredentials: true
                 }
                 );
