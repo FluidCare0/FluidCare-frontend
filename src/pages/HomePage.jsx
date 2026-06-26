@@ -16,7 +16,10 @@ const HomePage = () => {
     });
     const [wardFilter, setWardFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
-    const [selectedDevice, setSelectedDevice] = useState(null);
+    const [selectedDeviceId, setSelectedDeviceId] = useState(null);
+    const selectedDevice = selectedDeviceId != null
+        ? devices.find(d => d.id === selectedDeviceId) ?? null
+        : null;
 
     // Node request states
     const [nodeRequests, setNodeRequests] = useState([]);
@@ -356,7 +359,7 @@ const HomePage = () => {
                 </Card>
             ) : viewMode === 'card' ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {filteredDevices.map((device) => (<DeviceCard key={device.id} device={device} onShowDetails={() => setSelectedDevice(device)} />))}
+                    {filteredDevices.map((device) => (<DeviceCard key={device.id} device={device} onShowDetails={() => setSelectedDeviceId(device.id)} />))}
                 </div>
             ) : (
                 <Card className="overflow-x-auto p-0">
@@ -380,7 +383,7 @@ const HomePage = () => {
                                     <td className="px-6 py-4 text-sm text-gray-700">{device.level}%</td>
                                     <td className="px-6 py-4 text-sm text-gray-700">{device.status}</td>
                                     <td className="px-6 py-4 text-sm font-medium">
-                                        <button onClick={() => setSelectedDevice(device)} className="text-blue-600 hover:text-blue-800">View</button>
+                                        <button onClick={() => setSelectedDeviceId(device.id)} className="text-blue-600 hover:text-blue-800">View</button>
                                     </td>
                                 </tr>
                             ))}
@@ -398,7 +401,7 @@ const HomePage = () => {
                                 <h3 className="text-2xl font-bold text-gray-800">Device Details</h3>
                                 <p className="mt-1 text-sm text-gray-500">Live snapshot for device #{selectedDevice.id}</p>
                             </div>
-                            <button onClick={() => setSelectedDevice(null)} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
+                            <button onClick={() => setSelectedDeviceId(null)} className="text-2xl text-gray-400 hover:text-gray-600">×</button>
                         </div>
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <Card className="p-4"><p className="text-sm text-gray-500">Patient</p><p className="mt-1 text-lg font-semibold text-gray-900">{selectedDevice.patient || 'No Patient'}</p></Card>
