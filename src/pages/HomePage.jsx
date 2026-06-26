@@ -532,7 +532,6 @@ const HomePage = () => {
                             <select value={fluidType} onChange={(e) => setFluidType(e.target.value)} className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 rounded">
                                 <option value="">Select Fluid Type</option>
                                 <option value="iv_bag">IV Bag</option>
-                                <option value="blood_bag">Blood Bag</option>
                             </select>
                         </div>
 
@@ -541,8 +540,8 @@ const HomePage = () => {
                             <label className="mb-1 block text-sm font-medium text-gray-700">Capacity <span className="text-red-500">*</span></label>
                             <select value={fluidCapacity} onChange={(e) => setFluidCapacity(e.target.value)} className="w-full border border-gray-300 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500 rounded">
                                 <option value="">Select Capacity</option>
+                                <option value="100">100 ml</option>
                                 <option value="500">500 ml</option>
-                                <option value="1000">1000 ml</option>
                             </select>
                         </div>
 
