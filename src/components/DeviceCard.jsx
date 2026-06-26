@@ -33,7 +33,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
         const { thresholdLow, thresholdHigh } = device.fluidBag;
         if (alertPercent <= thresholdLow) return 'critical';
         if (alertPercent <= thresholdLow * 1.2) return 'warning';
-        if (alertPercent >= thresholdHigh) return 'overfill';
         return 'normal';
     };
 
@@ -44,7 +43,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
             case 'offline': return 'text-gray-500';
             case 'critical': return 'text-red-600';
             case 'warning': return 'text-yellow-600';
-            case 'overfill': return 'text-purple-600';
             case 'normal': return 'text-green-600';
             default: return 'text-gray-500';
         }
@@ -55,7 +53,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
             case 'offline': return '#9CA3AF';
             case 'critical': return '#EF4444';
             case 'warning': return '#F59E0B';
-            case 'overfill': return '#A855F7';
             case 'normal': return '#10B981';
             default: return '#9CA3AF';
         }
@@ -66,7 +63,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
             case 'offline': return 'bg-gradient-to-r from-gray-100 to-gray-200';
             case 'critical': return 'bg-gradient-to-r from-red-50 to-red-100';
             case 'warning': return 'bg-gradient-to-r from-yellow-50 to-yellow-100';
-            case 'overfill': return 'bg-gradient-to-r from-purple-50 to-purple-100';
             case 'normal': return 'bg-gradient-to-r from-green-50 to-green-100';
             default: return 'bg-gradient-to-r from-gray-100 to-gray-200';
         }
@@ -77,7 +73,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
             case 'offline': return 'border-gray-300';
             case 'critical': return 'border-red-300';
             case 'warning': return 'border-yellow-300';
-            case 'overfill': return 'border-purple-300';
             case 'normal': return 'border-green-300';
             default: return 'border-gray-300';
         }
@@ -88,7 +83,6 @@ const DeviceCard = ({ device, onShowDetails }) => {
             'offline': { bg: 'bg-gray-500', text: isTaskCompleted ? 'Task Completed' : 'Offline' },
             'critical': { bg: 'bg-red-500', text: 'Critical Low' },
             'warning': { bg: 'bg-yellow-500', text: 'Low' },
-            'overfill': { bg: 'bg-purple-500', text: 'Overfill' },
             'normal': { bg: 'bg-green-500', text: 'Normal' },
         };
         return badges[status] || badges['offline'];
