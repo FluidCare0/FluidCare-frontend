@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Droplets, Home, Users, PlusCircle, UserCog, History, Send, LogOut, ChevronLeft, ChevronRight, X, User } from 'lucide-react';
+import { Droplets, Home, Users, PlusCircle, UserCog, Send, LogOut, ChevronLeft, ChevronRight, X, User } from 'lucide-react';
 import NavButton from './NavButton';
 
 const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, role, onLogout, isMobileOpen, onCloseMobile }) => {
@@ -12,7 +12,6 @@ const Sidebar = ({ activeSection, onSectionChange, hospitalName, username, role,
             { id: 'patient-list', label: 'Patient List', icon: Users },
             { id: 'add-ward', label: 'Add Ward', icon: PlusCircle },
             { id: 'manage-staff', label: 'Manage Staff', icon: UserCog },
-            { id: 'history', label: 'History', icon: History },
             { id: 'profile', label: 'My Profile', icon: User },
         ];
         if (role === 'root_admin' || role === 'manager') {
