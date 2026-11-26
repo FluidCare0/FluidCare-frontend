@@ -6,7 +6,7 @@
 This is a React project built with **Vite**, using **Tailwind CSS** for styling. It includes API utilities, custom hooks, and reusable components.
 
 ## Prerequisites
-
+ 
 - Node.js (v18+ recommended)  
 - npm (v9+ recommended) or Yarn/Pnpm
 
